@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "0.2.0",
+  "corpusId": "arabic-core-preview-v2",
+  "unicodeVersion": "16.0.0",
+  "description": "Behavior-level shaping checks for the Arabic core preset. Expected glyph sequences are in HarfBuzz visual RTL order (rightmost glyph first). Cases are skipped when their required glyph artwork is not present in the test project.",
+  "cases": [
+    {
+      "id": "isolated_beh",
+      "label": "حرف مفرد",
+      "text": "ب",
+      "expectGlyphs": ["beh.isol"],
+      "expectSequence": ["beh.isol"]
+    },
+    {
+      "id": "initial_beh",
+      "label": "بدائي قبل حرف واصل",
+      "text": "بس",
+      "expectGlyphs": ["seen.fina", "beh.init"],
+      "expectSequence": ["seen.fina", "beh.init"]
+    },
+    {
+      "id": "medial_seen",
+      "label": "وسيط بين حرفين واصلين",
+      "text": "بسب",
+      "expectGlyphs": ["beh.fina", "seen.medi", "beh.init"],
+      "expectSequence": ["beh.fina", "seen.medi", "beh.init"]
+    },
+    {
+      "id": "final_beh",
+      "label": "نهائي بعد حرف واصل",
+      "text": "سب",
+      "expectGlyphs": ["beh.fina", "seen.init"],
+      "expectSequence": ["beh.fina", "seen.init"]
+    },
+    {
+      "id": "right_joining_transition",
+      "label": "انتقال من حرف واصل يميناً",
+      "text": "اب",
+      "expectGlyphs": ["beh.isol", "alef.isol"],
+      "expectSequence": ["beh.isol", "alef.isol"]
+    },
+    {
+      "id": "non_joining_digit",
+      "label": "انتقال إلى رقم غير واصل",
+      "text": "ب١",
+      "expectGlyphs": ["one.isol", "beh.isol"],
+      "expectSequence": ["one.isol", "beh.isol"]
+    },
+    {
+      "id": "top_mark",
+      "label": "حركة علوية",
+      "text": "بَ",
+      "expectGlyphs": ["fatha.isol", "beh.isol"],
+      "expectSequence": ["fatha.isol", "beh.isol"]
+    },
+    {
+      "id": "stacked_marks",
+      "label": "حركات متراكبة",
+      "text": "بَُ",
+      "expectGlyphs": ["damma.isol", "fatha.isol", "beh.isol"],
+      "expectSequence": ["damma.isol", "fatha.isol", "beh.isol"]
+    },
+    {
+      "id": "lam_alef",
+      "label": "لام ألف اختيارية",
+      "text": "لا",
+      "expectGlyphs": ["lam.fina", "alef.isol"],
+      "alternateGlyphs": ["lam_alef.fina"],
+      "optional": true
+    },
+    {
+      "id": "punctuation",
+      "label": "ترقيم عربي",
+      "text": "ب،",
+      "expectGlyphs": ["comma.isol", "beh.isol"],
+      "expectSequence": ["comma.isol", "beh.isol"]
+    },
+    {
+      "id": "mixed_script",
+      "label": "نص مختلط",
+      "text": "Font ب ١",
+      "expectGlyphs": ["beh.isol", "one.isol"]
+    }
+  ]
+}

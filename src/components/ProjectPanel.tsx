@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../core/api";
 import type { ProjectHandle } from "../core/types";
@@ -14,6 +14,18 @@ export default function ProjectPanel({ project, onProject, onNotice }: Props) {
   const [family, setFamily] = useState("");
   const [style, setStyle] = useState("Regular");
   const [upm, setUpm] = useState(1000);
+  const [version, setVersion] = useState("1.000");
+  const [designer, setDesigner] = useState("");
+  const [copyright, setCopyright] = useState("");
+  const [license, setLicense] = useState("");
+
+  useEffect(() => {
+    if (!project) return;
+    setVersion(project.project.font.version);
+    setDesigner(project.project.font.designer);
+    setCopyright(project.project.font.copyright);
+    setLicense(project.project.font.license);
+  }, [project]);
 
   async function createProject() {
     try {
@@ -60,6 +72,30 @@ export default function ProjectPanel({ project, onProject, onNotice }: Props) {
     }
   }
 
+  async function saveExportMetadata() {
+    if (!project) return;
+    const updated: ProjectHandle = {
+      ...project,
+      project: {
+        ...project.project,
+        font: {
+          ...project.project.font,
+          version: version.trim() || "1.000",
+          designer: designer.trim(),
+          copyright: copyright.trim(),
+          license: license.trim(),
+        },
+      },
+    };
+    try {
+      await api.saveProject(project.path, updated.project);
+      onProject(updated);
+      onNotice("تم حفظ بيانات التصدير", "ok");
+    } catch (error) {
+      onNotice(String(error), "error");
+    }
+  }
+
   return (
     <div className="panel">
       <h2>المشروع</h2>
@@ -99,6 +135,19 @@ export default function ProjectPanel({ project, onProject, onNotice }: Props) {
             <div><dt>UPM</dt><dd>{project.project.font.unitsPerEm}</dd></div>
             <div><dt>الخانات</dt><dd>{project.project.glyphSlots.length}</dd></div>
           </dl>
+
+          <h3>بيانات التصدير</h3>
+          <label>الإصدار</label>
+          <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.000" dir="ltr" />
+          <label>المصمم</label>
+          <input value={designer} onChange={(e) => setDesigner(e.target.value)} placeholder="اسم المصمم" />
+          <label>حقوق النشر</label>
+          <input value={copyright} onChange={(e) => setCopyright(e.target.value)} placeholder="Copyright …" dir="ltr" />
+          <label>الترخيص</label>
+          <input value={license} onChange={(e) => setLicense(e.target.value)} placeholder="OFL-1.1" dir="ltr" />
+          <div className="button-row">
+            <button onClick={() => void saveExportMetadata()}>حفظ بيانات التصدير</button>
+          </div>
         </div>
       ) : (
         <div className="empty-card">لا يوجد مشروع مفتوح حالياً.</div>

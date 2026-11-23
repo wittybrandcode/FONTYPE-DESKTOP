@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import BuildPanel from "./components/BuildPanel";
 import EnginePanel from "./components/EnginePanel";
 import GlyphWorkspace from "./components/GlyphWorkspace";
 import InventoryPanel from "./components/InventoryPanel";
@@ -12,7 +13,7 @@ interface Notice {
   kind: "ok" | "error";
 }
 
-type Tab = "workspace" | "inventory" | "engine";
+type Tab = "workspace" | "inventory" | "build" | "engine";
 
 export default function App() {
   const [project, setProject] = useState<ProjectHandle | null>(null);
@@ -21,6 +22,7 @@ export default function App() {
   const [healthStatus, setHealthStatus] = useState<"idle" | "checking" | "ok" | "error">("idle");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [tab, setTab] = useState<Tab>("workspace");
+  const [focusSlotId, setFocusSlotId] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -58,8 +60,8 @@ export default function App() {
           </div>
         </div>
         <div className="topbar-meta">
-          <span className="phase-chip">المرحلة 3 — المراسي ومصدر الخط</span>
-          <span className="version-chip">v0.4.0</span>
+          <span className="phase-chip">المرحلة 6 — التثبيت والإصدار</span>
+          <span className="version-chip">v0.6.0</span>
         </div>
       </header>
 
@@ -101,6 +103,14 @@ export default function App() {
             </button>
             <button
               role="tab"
+              aria-selected={tab === "build"}
+              className={tab === "build" ? "active" : ""}
+              onClick={() => setTab("build")}
+            >
+              البناء والمعاينة
+            </button>
+            <button
+              role="tab"
               aria-selected={tab === "engine"}
               className={tab === "engine" ? "active" : ""}
               onClick={() => setTab("engine")}
@@ -111,7 +121,12 @@ export default function App() {
 
           {tab === "workspace" ? (
             project ? (
-              <GlyphWorkspace project={project} onProject={setProject} onNotice={showNotice} />
+              <GlyphWorkspace
+                project={project}
+                onProject={setProject}
+                onNotice={showNotice}
+                initialSlotId={focusSlotId}
+              />
             ) : (
               <div className="panel empty-workspace">
                 <h2>مساحة عمل الخط</h2>
@@ -133,6 +148,16 @@ export default function App() {
                 </p>
               </div>
             )
+          ) : tab === "build" ? (
+            <BuildPanel
+              project={project}
+              onProject={setProject}
+              onNotice={showNotice}
+              onOpenSlot={(slotId) => {
+                setFocusSlotId(slotId);
+                setTab("workspace");
+              }}
+            />
           ) : (
             <SpikePanel project={project} onNotice={showNotice} />
           )}
@@ -140,8 +165,8 @@ export default function App() {
       </main>
 
       <footer className="footer-bar">
-        <span>المراسي ومصدر UFO: المرحلة 3</span>
-        <span>التشكيل العربي وبناء الخط: المرحلة 4</span>
+        <span>التشكيل وبناء OTF/TTF: مكتمل</span>
+        <span>المعاينة والجودة: مكتملة</span>
       </footer>
     </div>
   );

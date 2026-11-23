@@ -27,6 +27,7 @@ interface Props {
   project: ProjectHandle;
   onProject: (handle: ProjectHandle) => void;
   onNotice: (text: string, kind?: "ok" | "error") => void;
+  initialSlotId?: string | null;
 }
 
 type DragState =
@@ -94,7 +95,7 @@ function round(value: number, digits = 1): number {
   return Math.round(value * factor) / factor;
 }
 
-export default function GlyphWorkspace({ project, onProject, onNotice }: Props) {
+export default function GlyphWorkspace({ project, onProject, onNotice, initialSlotId }: Props) {
   const slots = project.project.glyphSlots;
   const [selectedId, setSelectedId] = useState(() =>
     slots.find((slot) => slot.originalSvg)?.slotId ?? slots[0]?.slotId ?? "",
@@ -126,6 +127,13 @@ export default function GlyphWorkspace({ project, onProject, onNotice }: Props) 
   useEffect(() => {
     setAnchorSuggestions([]);
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!initialSlotId) return;
+    if (slots.some((slot) => slot.slotId === initialSlotId)) {
+      setSelectedId(initialSlotId);
+    }
+  }, [initialSlotId, slots]);
 
   useEffect(() => {
     if (!wrapRef.current) return;

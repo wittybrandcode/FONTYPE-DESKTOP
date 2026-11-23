@@ -41,6 +41,24 @@ def test_svg_to_outline_bounds(tmp_path):
     assert outline.contour_count == 1
 
 
+def test_oversized_svg_is_rejected():
+    try:
+        geometry.read_svg_bytes(b"x" * (geometry.MAX_SVG_BYTES + 1))
+    except Exception as exc:
+        assert getattr(exc, "code", None) == "SVG_TOO_LARGE"
+        return
+    raise AssertionError("expected oversized SVG error")
+
+
+def test_malformed_svg_is_rejected():
+    try:
+        geometry.parse_svg_document("<svg><path")
+    except Exception as exc:
+        assert getattr(exc, "code", None) == "SVG_MALFORMED"
+        return
+    raise AssertionError("expected malformed SVG error")
+
+
 def test_unsupported_text_is_rejected():
     svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text>abc</text></svg>'
     try:

@@ -115,6 +115,14 @@ describe("snapping", () => {
     expect(result.point.x).toBe(100);
   });
 
+  it("keeps snap tolerance in screen pixels across zoom levels", () => {
+    const targets = [target("g1", 3, "x", 100)];
+    expect(findSnap({ x: 110, y: 0 }, targets, options).snapped).toBe(false);
+    expect(
+      findSnap({ x: 110, y: 0 }, targets, { ...options, zoom: 0.5 }).snapped,
+    ).toBe(true);
+  });
+
   it("ignores disabled target groups", () => {
     const result = findSnap({ x: 103, y: 0 }, [target("g1", 3, "x", 100)], {
       ...options,

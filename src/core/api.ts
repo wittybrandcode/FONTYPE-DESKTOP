@@ -4,12 +4,14 @@ import { parseEngineEvent, type EngineEvent } from "./protocol";
 import type {
   Anchor,
   AnchorSpec,
+  BuildRecord,
   GlyphSlot,
   GlobalMetrics,
   Guide,
   PresetInfo,
   Project,
   ProjectHandle,
+  ShapingOptions,
   SvgInspection,
   WorkspacePrefs,
 } from "./types";
@@ -92,6 +94,13 @@ export const api = {
     invoke<GlyphSlot>("apply_anchor_preset", { path, slotId }),
   setAnchors: (path: string, slotId: string, anchors: Anchor[]) =>
     invoke<GlyphSlot>("set_anchors", { path, slotId, anchors }),
+  setShapingOptions: (path: string, shaping: ShapingOptions) =>
+    invoke<ShapingOptions>("set_shaping_options", { path, options: shaping }),
+  recordBuild: (path: string, record: BuildRecord) =>
+    invoke<BuildRecord[]>("record_build", { path, record }),
+  backupProject: (path: string) => invoke<string>("backup_project", { path }),
+  restoreProject: (path: string, backup: string) =>
+    invoke<ProjectHandle>("restore_project", { path, backup }),
   engineInfo: () => invoke<Record<string, unknown>>("engine_info"),
   engineCancel: (jobId: string) => invoke<boolean>("engine_cancel", { jobId }),
 };
@@ -101,8 +110,10 @@ export async function runEngineJob(
   params: Record<string, unknown>,
   onEvent?: (event: EngineEvent) => void,
   timeoutMs = 180_000,
+  onJob?: (jobId: string) => void,
 ): Promise<Record<string, unknown>> {
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  onJob?.(jobId);
   let resolveJob!: (value: Record<string, unknown>) => void;
   let rejectJob!: (reason: Error) => void;
   const finished = new Promise<Record<string, unknown>>((resolve, reject) => {
@@ -145,15 +156,36 @@ export async function runEngineJob(
   return finished;
 }
 
-/** Builds the intermediate UFO from the persisted project glyph model. */
-export function buildFontSource(handle: ProjectHandle): Promise<Record<string, unknown>> {
+/** Engine-ready glyph records shared by source generation, builds and preview. */
+export function projectGlyphParams(handle: ProjectHandle): Record<string, unknown>[] {
+  return handle.project.glyphSlots
+    .filter((slot) => slot.import?.previewPath)
+    .map((slot) => ({
+      slotId: slot.slotId,
+      glyphName: slot.glyphName,
+      unicode: slot.unicode,
+      form: slot.form,
+      joiningType: slot.joiningType,
+      group: slot.group,
+      markClass: slot.markClass,
+      characterName: slot.characterName,
+      previewPath: slot.import?.previewPath ?? "",
+      placement: slot.placement,
+      advanceWidth: slot.metrics.advanceWidth,
+      anchors: slot.anchors,
+    }));
+}
+
+function projectBaseParams(handle: ProjectHandle): Record<string, unknown> {
   const { project } = handle;
-  const params: Record<string, unknown> = {
-    outputPath: `${handle.path}/source/fontype.ufo`,
+  return {
     upm: project.font.unitsPerEm,
     familyName: project.font.familyName,
     styleName: project.font.styleName,
     designer: project.font.designer,
+    version: project.font.version,
+    copyright: project.font.copyright,
+    license: project.font.license,
     projectId: project.projectId,
     schemaVersion: project.schemaVersion,
     presetId: project.font.characterSetPreset,
@@ -162,22 +194,65 @@ export function buildFontSource(handle: ProjectHandle): Promise<Record<string, u
       descender: project.metrics.descender,
       capHeight: project.metrics.capHeight,
     },
-    glyphs: project.glyphSlots
-      .filter((slot) => slot.import?.previewPath)
-      .map((slot) => ({
-        slotId: slot.slotId,
-        glyphName: slot.glyphName,
-        unicode: slot.unicode,
-        form: slot.form,
-        joiningType: slot.joiningType,
-        group: slot.group,
-        markClass: slot.markClass,
-        characterName: slot.characterName,
-        previewPath: slot.import?.previewPath ?? "",
-        placement: slot.placement,
-        advanceWidth: slot.metrics.advanceWidth,
-        anchors: slot.anchors,
-      })),
+    glyphs: projectGlyphParams(handle),
+    shaping: project.shaping,
   };
-  return runEngineJob("build_source", params);
+}
+
+/** Builds the intermediate UFO from the persisted project glyph model. */
+export function buildFontSource(handle: ProjectHandle): Promise<Record<string, unknown>> {
+  return runEngineJob("build_source", {
+    ...projectBaseParams(handle),
+    outputPath: `${handle.path}/source/fontype.ufo`,
+  });
+}
+
+export interface BuildJobOptions {
+  onEvent?: (event: EngineEvent) => void;
+  onJob?: (jobId: string) => void;
+}
+
+export function buildFont(
+  handle: ProjectHandle,
+  buildId: string,
+  options: BuildJobOptions = {},
+): Promise<Record<string, unknown>> {
+  return runEngineJob(
+    "build_font",
+    {
+      ...projectBaseParams(handle),
+      projectPath: handle.path,
+      buildId,
+      outputDir: `${handle.path}/output/${buildId}`,
+      reportPath: `${handle.path}/reports/${buildId}.json`,
+      appVersion: "0.6.0",
+    },
+    options.onEvent,
+    300_000,
+    options.onJob,
+  );
+}
+
+export function shapePreview(
+  handle: ProjectHandle,
+  fontPath: string,
+  text: string,
+  mode: string,
+): Promise<Record<string, unknown>> {
+  return runEngineJob("shape_preview", {
+    fontPath,
+    text,
+    mode,
+    glyphs: projectGlyphParams(handle),
+  });
+}
+
+export function runShapingCorpus(
+  handle: ProjectHandle,
+  fontPath: string,
+): Promise<Record<string, unknown>> {
+  return runEngineJob("run_corpus", {
+    fontPath,
+    glyphs: projectGlyphParams(handle),
+  });
 }

@@ -11,6 +11,7 @@ from fontTools.pens.recordingPen import RecordingPen
 from ufoLib2 import Font
 
 ANCHOR_CLASSES_LIB_KEY = "org.fontype.anchorClasses"
+ANCHOR_NAMES_LIB_KEY = "org.fontype.anchorNames"
 SOURCE_LIB_KEY = "org.fontype.source"
 
 
@@ -34,6 +35,21 @@ def _notdef_pen() -> RecordingPen:
     pen.lineTo((460, 0))
     pen.closePath()
     return pen
+
+
+def _version_parts(value: str) -> tuple[int, int]:
+    """Turn a designer-facing version such as ``1.030`` into UFO fields."""
+
+    parts = str(value or "").strip().split(".")
+    try:
+        major = int(parts[0]) if parts else 1
+    except ValueError:
+        major = 1
+    try:
+        minor = int(parts[1]) if len(parts) > 1 else 0
+    except ValueError:
+        minor = 0
+    return max(major, 0), min(max(minor, 0), 999)
 
 
 def build_ufo(
@@ -90,6 +106,7 @@ def build_source_ufo(
     groups: dict[str, list[str]],
     metadata: dict[str, Any],
     features: str = "languagesystem arab dflt;\n",
+    font_lib: dict[str, Any] | None = None,
 ) -> Path:
     """Write a project-derived UFO with metrics, anchors, groups and metadata.
 
@@ -109,9 +126,17 @@ def build_source_ufo(
     else:
         info.capHeight = int(upm * 0.7)
     info.xHeight = int(upm * 0.5)
-    info.versionMajor = 0
-    info.versionMinor = 1
+    major, minor = _version_parts(str(metadata.get("version") or "1.000"))
+    info.versionMajor = major
+    info.versionMinor = minor
     info.openTypeNameDesigner = str(metadata.get("designer") or "FONTYPE")
+    info.openTypeNameVersion = f"{major}.{minor:03d}"
+    copyright_text = str(metadata.get("copyright") or "").strip()
+    license_text = str(metadata.get("license") or "").strip()
+    if copyright_text:
+        info.copyright = copyright_text
+    if license_text:
+        info.openTypeNameLicense = license_text
     info.openTypeOS2TypoLineGap = 0
 
     for glyph_spec in glyphs:
@@ -120,20 +145,23 @@ def build_source_ufo(
         if glyph_spec.unicode_value is not None:
             glyph.unicode = glyph_spec.unicode_value
         glyph_spec.pen.replay(glyph.getPen())
+        anchor_classes: dict[str, str] = {}
+        anchor_names: dict[str, str] = {}
         for anchor in glyph_spec.anchors:
+            original = str(anchor["name"])
+            ufo_name = str(anchor.get("ufoName") or original)
             glyph.appendAnchor(
                 {
-                    "name": str(anchor["name"]),
+                    "name": ufo_name,
                     "x": int(round(float(anchor["x"]))),
                     "y": int(round(float(anchor["y"]))),
                 }
             )
-        anchor_classes = {
-            str(anchor["name"]): str(anchor.get("class") or anchor["name"])
-            for anchor in glyph_spec.anchors
-        }
+            anchor_classes[original] = str(anchor.get("class") or original)
+            anchor_names[ufo_name] = original
         if anchor_classes:
             glyph.lib[ANCHOR_CLASSES_LIB_KEY] = anchor_classes
+            glyph.lib[ANCHOR_NAMES_LIB_KEY] = anchor_names
         if glyph_spec.metadata:
             glyph.lib[SOURCE_LIB_KEY] = dict(glyph_spec.metadata)
 
@@ -147,6 +175,9 @@ def build_source_ufo(
             font.groups[group_name] = list(dict.fromkeys(members))
 
     font.lib[SOURCE_LIB_KEY] = dict(metadata)
+    if font_lib:
+        for key, value in font_lib.items():
+            font.lib[key] = value
     font.features.text = features
     output_path.parent.mkdir(parents=True, exist_ok=True)
     font.save(output_path)

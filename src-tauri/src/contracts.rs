@@ -39,6 +39,24 @@ impl Default for FontMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+pub struct ShapingOptions {
+    pub lam_alef_ligatures: bool,
+    pub mark_positioning: bool,
+    pub cursive_positioning: bool,
+}
+
+impl Default for ShapingOptions {
+    fn default() -> Self {
+        Self {
+            lam_alef_ligatures: false,
+            mark_positioning: true,
+            cursive_positioning: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct GlobalMetrics {
     pub baseline: i32,
     pub ascender: i32,
@@ -308,6 +326,8 @@ pub struct Project {
     pub font: FontMeta,
     pub metrics: GlobalMetrics,
     pub workspace: WorkspacePrefs,
+    #[serde(default)]
+    pub shaping: ShapingOptions,
     pub glyph_slots: Vec<GlyphSlot>,
     pub builds: Vec<BuildRecord>,
     pub created_at: String,
@@ -341,6 +361,7 @@ impl Project {
             font,
             metrics,
             workspace: WorkspacePrefs::default(),
+            shaping: ShapingOptions::default(),
             glyph_slots: Vec::new(),
             builds: Vec::new(),
             created_at: timestamp.clone(),

@@ -33,6 +33,12 @@ export interface WorkspacePrefs {
   uiLanguage: string;
 }
 
+export interface ShapingOptions {
+  lamAlefLigatures: boolean;
+  markPositioning: boolean;
+  cursivePositioning: boolean;
+}
+
 export interface ValidationFinding {
   severity: "info" | "warning" | "error";
   code: string;
@@ -117,14 +123,28 @@ export interface GlyphSlot {
   validation: ValidationFinding[];
 }
 
+export interface BuildRecord {
+  buildId: string;
+  timestamp: string;
+  appVersion: string;
+  toolchainVersions: Record<string, string>;
+  requestedFormats: string[];
+  result: string;
+  compilerLogPath: string;
+  validationReportPath: string;
+  outputPaths: Record<string, string>;
+  projectHash: string;
+}
+
 export interface Project {
   schemaVersion: string;
   projectId: string;
   font: FontMeta;
   metrics: GlobalMetrics;
   workspace: WorkspacePrefs;
+  shaping: ShapingOptions;
   glyphSlots: GlyphSlot[];
-  builds: unknown[];
+  builds: BuildRecord[];
   createdAt: string;
   updatedAt: string;
 }

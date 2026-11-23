@@ -98,47 +98,72 @@ review badges. SVG replacement keeps slot metadata, metrics and anchors, and fla
 anchors when bounds change materially. Tests: Python 17, Rust 11, frontend 20; production build and
 compiled Tauri launch verified.
 
-## Phase 4 — Arabic shaping and font compilation
+## Phase 4 — Arabic shaping and font compilation ✅ مكتملة
 
-- [ ] Generate Unicode cmap mapping for supported base characters.
-- [ ] Generate contextual glyph substitution data for applicable forms.
-- [ ] Generate Arabic script/language feature configuration.
-- [ ] Generate mark attachment positioning from anchors.
-- [ ] Generate cursive attachment positioning from entry/exit anchors.
-- [ ] Implement configurable common lam-alef ligature group.
-- [ ] Compile OTF output.
-- [ ] Compile TTF output with tested outline conversion.
-- [ ] Inspect required font tables after compilation.
-- [ ] Add post-build validation and reproducible build report.
+- [x] Generate Unicode cmap mapping for supported base characters.
+- [x] Generate contextual glyph substitution data for applicable forms.
+- [x] Generate Arabic script/language feature configuration.
+- [x] Generate mark attachment positioning from anchors.
+- [x] Generate cursive attachment positioning from entry/exit anchors.
+- [x] Implement configurable common lam-alef ligature group.
+- [x] Compile OTF output.
+- [x] Compile TTF output with tested outline conversion.
+- [x] Inspect required font tables after compilation.
+- [x] Add post-build validation and reproducible build report.
 
 **Exit criteria:** a test project produces OTF and TTF fonts that install and pass structural validation.
 
-## Phase 5 — Preview and quality assurance
+**Phase 4 notes (2026-11-23):** `engine/fontype_engine/features.py` emits `init`/`medi`/`fina`
+contextual chaining rules and an optional `ccmp` lam-alef lookup. The medial rule matches the isolated
+glyph with both preceding and following joiners; this was verified empirically with HarfBuzz so
+three-letter words produce `fina → medi → init` in visual RTL order. `ufo2ft` derives GPOS/GDEF from
+normalized anchors (`top`/`bottom`, `_top`/`_bottom`, `entry`/`exit`) and `public.openTypeCategories`.
+`build.py` compiles OTF and TTF through fontmake, inspects `head/cmap/glyf/GSUB/GPOS/GDEF` and writes a
+JSON report plus compiler log under `reports/<buildId>/`. The UI records each build in `project.json`.
 
-- [ ] Integrate HarfBuzz preview shaping.
-- [ ] Implement character, word, and paragraph preview modes.
-- [ ] Add Arabic test corpus.
-- [ ] Add mixed-script, punctuation, digit, and diacritic tests.
-- [ ] Add right-joining and non-joining transition tests.
-- [ ] Link preview glyphs to their source slots where possible.
-- [ ] Implement validation severity model (blocker/warning/info).
-- [ ] Implement actionable validation report and navigation to affected slots.
+## Phase 5 — Preview and quality assurance ✅ مكتملة
+
+- [x] Integrate HarfBuzz preview shaping.
+- [x] Implement character, word, and paragraph preview modes.
+- [x] Add Arabic test corpus.
+- [x] Add mixed-script, punctuation, digit, and diacritic tests.
+- [x] Add right-joining and non-joining transition tests.
+- [x] Link preview glyphs to their source slots where possible.
+- [x] Implement validation severity model (blocker/warning/info).
+- [x] Implement actionable validation report and navigation to affected slots.
 
 **Exit criteria:** all supported shaping cases pass the defined test corpus and issues are understandable to a designer.
 
-## Phase 6 — Release hardening
+**Phase 5 notes (2026-11-23):** Local `uharfbuzz` shapes the compiled TTF for all three preview modes.
+Corpus `arabic-core-preview-v2` contains 11 cases covering isolated/initial/medial/final forms,
+right-joining and non-joining transitions, top and stacked marks, optional lam-alef, punctuation and
+mixed Arabic/Latin/digit strings. Expected sequences use HarfBuzz visual RTL order, and the UI labels
+the preview as such. A full synthetic 141-glyph preset fixture passes all 11 cases with no findings.
+Failures show expected vs. actual glyph sequences and link preview glyphs back to their project slots.
+Validation uses `error` (blocking), `warning` and `info` severities with Arabic messages and hints.
 
-- [ ] Add project backup and recovery.
-- [ ] Add import/build cancellation and progress reporting.
-- [ ] Test high-DPI and multiple display scales.
-- [ ] Test snap behavior across zoom levels.
-- [ ] Test malformed and oversized SVG inputs.
-- [ ] Test Windows packaging; assess macOS packaging.
-- [ ] Add sample project and onboarding walkthrough.
-- [ ] Add export metadata editor and output folder actions.
-- [ ] Prepare release checklist and known limitations.
+## Phase 6 — Release hardening (MVP)
+
+- [x] Add project backup and recovery.
+- [x] Add import/build cancellation and progress reporting.
+- [ ] Test high-DPI and multiple display scales (manual matrix pending).
+- [x] Test snap behavior across zoom levels.
+- [x] Test malformed and oversized SVG inputs.
+- [ ] Test Windows installer packaging; assess macOS packaging (debug Windows launch verified).
+- [ ] Add sample project and onboarding walkthrough (written walkthrough in `README.md`).
+- [x] Add export metadata editor and output folder actions.
+- [x] Prepare release checklist and known limitations.
 
 **Exit criteria:** stable MVP package with a documented supported character set and reproducible build process.
+
+**Phase 6 notes (2026-11-23):** Backups are timestamped folder copies under `<project>/backups/` and
+can be restored from the Build panel. Engine jobs expose progress/log events and can be cancelled by
+job id. Export metadata (version, designer, copyright, license) is editable in the Project panel and
+flows into the UFO/name table. Pinned `engine/uv.lock`, `package-lock.json` and `src-tauri/Cargo.lock`
+make the build reproducible; `README.md` documents the supported character set, build steps, release
+checklist and known limitations. Final verification: Python 26, Rust 12, frontend 21 tests passing;
+`npm run build` and the compiled Tauri executable launch cleanly. Remaining manual checks are listed
+in `README.md` under known limitations.
 
 ## Priority order
 

@@ -1,7 +1,12 @@
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::contracts::{now_iso, Project, ProjectHandle, SCHEMA_VERSION};
+use chrono::Utc;
+
+use crate::contracts::{
+    now_iso, BuildRecord, Project, ProjectHandle, ShapingOptions, SCHEMA_VERSION,
+};
 use crate::inventory::generate_slots;
 
 fn safe_name(name: &str) -> Result<String, String> {
@@ -17,6 +22,41 @@ fn safe_name(name: &str) -> Result<String, String> {
 
 fn project_file(root: &Path) -> PathBuf {
     root.join("project.json")
+}
+
+fn normalize_root(path: String) -> Result<PathBuf, String> {
+    let mut root = PathBuf::from(path);
+    if root.is_file() {
+        root = root
+            .parent()
+            .ok_or_else(|| "مسار المشروع غير صالح.".to_string())?
+            .to_path_buf();
+    }
+    if !root.is_dir() {
+        return Err("مجلد المشروع غير موجود.".into());
+    }
+    Ok(root)
+}
+
+fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if name == "backups" {
+            continue;
+        }
+        let target = destination.join(name);
+        if entry.file_type()?.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn write_project(root: &Path, project: &Project) -> Result<(), String> {
@@ -133,6 +173,57 @@ pub fn save_project(path: String, project: Project) -> Result<(), String> {
     write_project(&root, &project)
 }
 
+#[tauri::command]
+pub fn set_shaping_options(
+    path: String,
+    options: ShapingOptions,
+) -> Result<ShapingOptions, String> {
+    let root = normalize_root(path)?;
+    let (mut project, _) = read_project(&root)?;
+    project.shaping = options.clone();
+    write_project(&root, &project)?;
+    Ok(options)
+}
+
+#[tauri::command]
+pub fn record_build(path: String, record: BuildRecord) -> Result<Vec<BuildRecord>, String> {
+    if record.build_id.trim().is_empty() {
+        return Err("معرّف البناء فارغ.".into());
+    }
+    let root = normalize_root(path)?;
+    let (mut project, _) = read_project(&root)?;
+    project
+        .builds
+        .retain(|existing| existing.build_id != record.build_id);
+    project.builds.insert(0, record);
+    project.builds.truncate(20);
+    write_project(&root, &project)?;
+    Ok(project.builds)
+}
+
+#[tauri::command]
+pub fn backup_project(path: String) -> Result<String, String> {
+    let root = normalize_root(path)?;
+    let stamp = Utc::now().format("%Y%m%dT%H%M%S").to_string();
+    let destination = root.join("backups").join(format!("backup-{stamp}"));
+    if destination.exists() {
+        return Err("توجد نسخة احتياطية بهذا الوقت مسبقاً.".into());
+    }
+    copy_tree(&root, &destination).map_err(|e| format!("تعذّر إنشاء النسخة الاحتياطية: {e}"))?;
+    Ok(destination.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub fn restore_project(path: String, backup: String) -> Result<ProjectHandle, String> {
+    let root = normalize_root(path)?;
+    let source = PathBuf::from(backup);
+    if !source.join("project.json").is_file() {
+        return Err("المجلد المحدد ليس نسخة احتياطية صالحة.".into());
+    }
+    copy_tree(&source, &root).map_err(|e| format!("تعذّر استعادة النسخة الاحتياطية: {e}"))?;
+    open_project(root.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -182,6 +273,62 @@ mod tests {
             1000,
         );
         assert!(result.is_err());
+        fs::remove_dir_all(&parent).unwrap();
+    }
+
+    #[test]
+    fn shaping_options_build_records_and_backup_roundtrip() {
+        let parent = temp_parent();
+        let handle = create_project(
+            parent.to_string_lossy().into_owned(),
+            "BuildTest".into(),
+            "Build Family".into(),
+            "Regular".into(),
+            1000,
+        )
+        .unwrap();
+
+        let options = set_shaping_options(
+            handle.path.clone(),
+            ShapingOptions {
+                lam_alef_ligatures: true,
+                mark_positioning: true,
+                cursive_positioning: true,
+            },
+        )
+        .unwrap();
+        assert!(options.lam_alef_ligatures);
+        assert_eq!(
+            open_project(handle.path.clone())
+                .unwrap()
+                .project
+                .shaping
+                .lam_alef_ligatures,
+            true
+        );
+
+        let record = BuildRecord {
+            build_id: "build-test-1".into(),
+            timestamp: now_iso(),
+            app_version: "0.5.0".into(),
+            result: "success".into(),
+            project_hash: "sha256:test".into(),
+            ..BuildRecord::default()
+        };
+        let builds = record_build(handle.path.clone(), record).unwrap();
+        assert_eq!(builds.len(), 1);
+        assert_eq!(builds[0].build_id, "build-test-1");
+
+        let backup = backup_project(handle.path.clone()).unwrap();
+        assert!(Path::new(&backup).join("project.json").is_file());
+
+        let mut project = open_project(handle.path.clone()).unwrap().project;
+        project.font.designer = "changed".into();
+        save_project(handle.path.clone(), project).unwrap();
+        let restored = restore_project(handle.path.clone(), backup).unwrap();
+        assert_ne!(restored.project.font.designer, "changed");
+        assert_eq!(restored.project.builds.len(), 1);
+
         fs::remove_dir_all(&parent).unwrap();
     }
 }

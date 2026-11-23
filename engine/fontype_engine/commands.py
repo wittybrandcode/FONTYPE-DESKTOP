@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from typing import Any, Callable
 
-from . import health, importer, source, spike
+from . import build, health, importer, preview, source, spike
 from .protocol import EngineError, decode, emit
 
 Emitter = Callable[[str, str, dict[str, Any]], None]
@@ -28,6 +28,15 @@ def dispatch(request: dict[str, Any], send: Emitter) -> None:
             send(job_id, "result", importer.inspect_svg(params))
         elif command == "build_source":
             send(job_id, "result", source.build_source(params))
+        elif command == "build_font":
+            result = build.build_font(
+                params, lambda kind, data: send(job_id, kind, data)
+            )
+            send(job_id, "result", result)
+        elif command == "shape_preview":
+            send(job_id, "result", preview.shape_preview(params))
+        elif command == "run_corpus":
+            send(job_id, "result", preview.run_corpus(params))
         elif command == "ping":
             send(job_id, "result", {"pong": True})
         else:
