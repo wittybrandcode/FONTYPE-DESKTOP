@@ -33,6 +33,9 @@ uv run --project engine pytest -q
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
+أو من مستكشف Windows: انقر مرتين على `dev.bat` في جذر المشروع. الملف يتحقق من `npm` و`uv`،
+يثبّت التبعيات عند غيابها، ثم يقلع `npm run tauri dev`. أغلق النافذة أو اضغط `Ctrl+C` لإيقاف التطبيق.
+
 لإعادة توليد أيقونة التطبيق:
 
 ```powershell
