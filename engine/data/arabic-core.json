@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "0.1.0",
+  "presetId": "arabic-core",
+  "label": "النواة العربية",
+  "unicodeVersion": "16.0.0",
+  "description": "المجموعة الأساسية المطلوبة للمرحلة الأولى. أشكال الوصل مشتقة من خصائص Unicode، لا من أسماء الملفات.",
+  "groups": [
+    {
+      "id": "letters",
+      "label": "الحروف",
+      "required": true,
+      "characters": [
+        { "u": "U+0627", "name": "Alef", "joiningType": "R" },
+        { "u": "U+0628", "name": "Beh", "joiningType": "D" },
+        { "u": "U+062A", "name": "Teh", "joiningType": "D" },
+        { "u": "U+062B", "name": "Theh", "joiningType": "D" },
+        { "u": "U+062C", "name": "Jeem", "joiningType": "D" },
+        { "u": "U+062D", "name": "Hah", "joiningType": "D" },
+        { "u": "U+062E", "name": "Khah", "joiningType": "D" },
+        { "u": "U+062F", "name": "Dal", "joiningType": "R" },
+        { "u": "U+0630", "name": "Thal", "joiningType": "R" },
+        { "u": "U+0631", "name": "Reh", "joiningType": "R" },
+        { "u": "U+0632", "name": "Zain", "joiningType": "R" },
+        { "u": "U+0633", "name": "Seen", "joiningType": "D" },
+        { "u": "U+0634", "name": "Sheen", "joiningType": "D" },
+        { "u": "U+0635", "name": "Sad", "joiningType": "D" },
+        { "u": "U+0636", "name": "Dad", "joiningType": "D" },
+        { "u": "U+0637", "name": "Tah", "joiningType": "D" },
+        { "u": "U+0638", "name": "Zah", "joiningType": "D" },
+        { "u": "U+0639", "name": "Ain", "joiningType": "D" },
+        { "u": "U+063A", "name": "Ghain", "joiningType": "D" },
+        { "u": "U+0641", "name": "Feh", "joiningType": "D" },
+        { "u": "U+0642", "name": "Qaf", "joiningType": "D" },
+        { "u": "U+0643", "name": "Kaf", "joiningType": "D" },
+        { "u": "U+0644", "name": "Lam", "joiningType": "D" },
+        { "u": "U+0645", "name": "Meem", "joiningType": "D" },
+        { "u": "U+0646", "name": "Noon", "joiningType": "D" },
+        { "u": "U+0647", "name": "Heh", "joiningType": "D" },
+        { "u": "U+0648", "name": "Waw", "joiningType": "R" },
+        { "u": "U+064A", "name": "Yeh", "joiningType": "D" },
+        { "u": "U+0629", "name": "TehMarbuta", "joiningType": "R" }
+      ]
+    },
+    {
+      "id": "hamza",
+      "label": "الهمزات",
+      "required": true,
+      "characters": [
+        { "u": "U+0621", "name": "Hamza", "joiningType": "U" },
+        { "u": "U+0622", "name": "AlefMadda", "joiningType": "R" },
+        { "u": "U+0623", "name": "AlefHamzaAbove", "joiningType": "R" },
+        { "u": "U+0624", "name": "WawHamza", "joiningType": "R" },
+        { "u": "U+0625", "name": "AlefHamzaBelow", "joiningType": "R" },
+        { "u": "U+0626", "name": "YehHamza", "joiningType": "D" }
+      ]
+    },
+    {
+      "id": "tatweel",
+      "label": "التطويل",
+      "required": false,
+      "characters": [
+        { "u": "U+0640", "name": "Tatweel", "joiningType": "D" }
+      ]
+    },
+    {
+      "id": "marks",
+      "label": "الحركات",
+      "required": false,
+      "characters": [
+        { "u": "U+064B", "name": "Fathatan", "joiningType": "T", "markClass": "top" },
+        { "u": "U+064C", "name": "Dammatan", "joiningType": "T", "markClass": "top" },
+        { "u": "U+064D", "name": "Kasratan", "joiningType": "T", "markClass": "bottom" },
+        { "u": "U+064E", "name": "Fatha", "joiningType": "T", "markClass": "top" },
+        { "u": "U+064F", "name": "Damma", "joiningType": "T", "markClass": "top" },
+        { "u": "U+0650", "name": "Kasra", "joiningType": "T", "markClass": "bottom" },
+        { "u": "U+0651", "name": "Shadda", "joiningType": "T", "markClass": "top" },
+        { "u": "U+0652", "name": "Sukun", "joiningType": "T", "markClass": "top" }
+      ]
+    },
+    {
+      "id": "punctuation",
+      "label": "علامات الترقيم",
+      "required": false,
+      "characters": [
+        { "u": "U+060C", "name": "Comma", "joiningType": "U" },
+        { "u": "U+061B", "name": "Semicolon", "joiningType": "U" },
+        { "u": "U+061F", "name": "QuestionMark", "joiningType": "U" }
+      ]
+    },
+    {
+      "id": "digits",
+      "label": "الأرقام العربية",
+      "required": false,
+      "characters": [
+        { "u": "U+0660", "name": "Zero", "joiningType": "U" },
+        { "u": "U+0661", "name": "One", "joiningType": "U" },
+        { "u": "U+0662", "name": "Two", "joiningType": "U" },
+        { "u": "U+0663", "name": "Three", "joiningType": "U" },
+        { "u": "U+0664", "name": "Four", "joiningType": "U" },
+        { "u": "U+0665", "name": "Five", "joiningType": "U" },
+        { "u": "U+0666", "name": "Six", "joiningType": "U" },
+        { "u": "U+0667", "name": "Seven", "joiningType": "U" },
+        { "u": "U+0668", "name": "Eight", "joiningType": "U" },
+        { "u": "U+0669", "name": "Nine", "joiningType": "U" }
+      ]
+    }
+  ],
+  "formsByJoiningType": {
+    "D": ["isolated", "initial", "medial", "final"],
+    "R": ["isolated", "final"],
+    "U": ["isolated"],
+    "T": ["isolated"]
+  }
+}

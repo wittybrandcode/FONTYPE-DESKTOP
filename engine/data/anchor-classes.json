@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "0.1.0",
+  "description": "سجل أصناف المراسي. الاسم في SLOT هو المرساة، والصنف يحدد أي علاقة positioning مولّدة.",
+  "classes": [
+    {
+      "name": "top",
+      "attachment": "mark-to-base",
+      "baseAnchor": "top",
+      "markAnchor": "top",
+      "label": "علامة فوق"
+    },
+    {
+      "name": "bottom",
+      "attachment": "mark-to-base",
+      "baseAnchor": "bottom",
+      "markAnchor": "bottom",
+      "label": "علامة تحت"
+    },
+    {
+      "name": "cursive-entry",
+      "attachment": "cursive",
+      "role": "entry",
+      "label": "نقطة دخول الوصل"
+    },
+    {
+      "name": "cursive-exit",
+      "attachment": "cursive",
+      "role": "exit",
+      "label": "نقطة خروج الوصل"
+    }
+  ]
+}
