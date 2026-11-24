@@ -11,11 +11,11 @@ import {
 import type { Anchor, AnchorSpec, GlyphSlot, GlobalMetrics, Guide, Project, ProjectHandle } from "../core/types";
 import { Icon } from "../ui/icons";
 import {
-  AccordionSection,
   IconButton,
   StatusChip,
   ToolbarDivider,
 } from "../ui/components";
+import { Inspector, InspectorSection } from "../ui/Inspector";
 import {
   collectSnapTargets,
   findSnap,
@@ -30,11 +30,21 @@ import {
   type Viewport,
 } from "../core/workspace";
 
+/** Edit actions exposed to the application menu/tool bar while this editor is mounted. */
+export interface EditorActions {
+  canUndo: boolean;
+  canRedo: boolean;
+  undo: () => void;
+  redo: () => void;
+}
+
 interface Props {
   project: ProjectHandle;
   onProject: (handle: ProjectHandle) => void;
   onNotice: (text: string, kind?: "ok" | "error") => void;
   initialSlotId?: string | null;
+  registerEditor?: (actions: EditorActions | null) => void;
+  onOpenInventory?: () => void;
 }
 
 type Tool = "select" | "pan";
@@ -104,7 +114,7 @@ function round(value: number, digits = 1): number {
   return Math.round(value * factor) / factor;
 }
 
-export default function GlyphWorkspace({ project, onProject, onNotice, initialSlotId }: Props) {
+export default function GlyphWorkspace({ project, onProject, onNotice, initialSlotId, registerEditor, onOpenInventory }: Props) {
   const slots = project.project.glyphSlots;
   const [selectedId, setSelectedId] = useState(() =>
     slots.find((slot) => slot.originalSvg)?.slotId ?? slots[0]?.slotId ?? "",
@@ -123,11 +133,14 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
   const [anchorsVisible, setAnchorsVisible] = useState(true);
   const [guidesVisible, setGuidesVisible] = useState(true);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    import: true,
     slot: true,
     anchors: true,
+    validation: true,
     guides: false,
     metrics: false,
     snap: false,
+    history: false,
   });
   function toggleSection(key: string) {
     setOpenSections((current) => ({ ...current, [key]: !current[key] }));
@@ -275,6 +288,16 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
     void persistAll(next).catch((error) => onNotice(String(error), "error"));
   }
 
+  const canUndo = past.length > 0;
+  const canRedo = future.length > 0;
+  useEffect(() => {
+    if (!registerEditor) return;
+    registerEditor({ canUndo, canRedo, undo, redo });
+    return () => registerEditor(null);
+    // undo/redo read only refs and stable setters; their identity changes each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerEditor, canUndo, canRedo]);
+
   useEffect(() => {
     function isTyping(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
@@ -299,9 +322,20 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
         return;
       }
       if (isTyping(event) || modifier || event.altKey) return;
+      if (document.querySelector('[role="dialog"]')) return;
       const key = event.key.toLowerCase();
       if (key === "v" || key === "h") {
         setTool(key === "v" ? "select" : "pan");
+      } else if (key === "a") {
+        setAnchorsVisible((value) => !value);
+      } else if (key === "g") {
+        setGuidesVisible((value) => !value);
+      } else if (key === "r") {
+        updatePrefs({ rulersVisible: !prefs.rulersVisible });
+      } else if (key === "d") {
+        updatePrefs({ gridVisible: !prefs.gridVisible });
+      } else if (key === "s") {
+        updatePrefs({ snapEnabled: !prefs.snapEnabled });
       } else if (key === "0") {
         setViewport(fitViewport(upm, size.w, size.h, outlineRect));
       } else if (event.key === "+" || event.key === "=") {
@@ -757,11 +791,11 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
           <IconButton icon="cursor" label="أداة التحديد" shortcut="V" active={tool === "select"} onClick={() => setTool("select")} />
           <IconButton icon="hand" label="أداة التحريك" shortcut="H" active={tool === "pan"} onClick={() => setTool("pan")} />
           <ToolbarDivider />
-          <IconButton icon="anchor" label="إظهار المراسي" active={anchorsVisible} onClick={() => setAnchorsVisible((value) => !value)} />
-          <IconButton icon="guide" label="إظهار الأدلة" active={guidesVisible} onClick={() => setGuidesVisible((value) => !value)} />
-          <IconButton icon="ruler" label="المساطر" active={prefs.rulersVisible} onClick={() => updatePrefs({ rulersVisible: !prefs.rulersVisible })} />
-          <IconButton icon="grid" label="الشبكة" active={prefs.gridVisible} onClick={() => updatePrefs({ gridVisible: !prefs.gridVisible })} />
-          <IconButton icon="magnet" label="الالتقاط الذكي" active={prefs.snapEnabled} onClick={() => updatePrefs({ snapEnabled: !prefs.snapEnabled })} />
+          <IconButton icon="anchor" label="إظهار المراسي" shortcut="A" active={anchorsVisible} onClick={() => setAnchorsVisible((value) => !value)} />
+          <IconButton icon="guide" label="إظهار الأدلة" shortcut="G" active={guidesVisible} onClick={() => setGuidesVisible((value) => !value)} />
+          <IconButton icon="ruler" label="المساطر" shortcut="R" active={prefs.rulersVisible} onClick={() => updatePrefs({ rulersVisible: !prefs.rulersVisible })} />
+          <IconButton icon="grid" label="الشبكة" shortcut="D" active={prefs.gridVisible} onClick={() => updatePrefs({ gridVisible: !prefs.gridVisible })} />
+          <IconButton icon="magnet" label="الالتقاط الذكي" shortcut="S" active={prefs.snapEnabled} onClick={() => updatePrefs({ snapEnabled: !prefs.snapEnabled })} />
           <span className="ws-rail-spacer" />
           <span className="ws-rail-label">FU</span>
         </div>
@@ -784,12 +818,6 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
             <ToolbarDivider />
             <IconButton icon="fit" label="احتواء الرسم" shortcut="0" onClick={() => setViewport(fitViewport(upm, size.w, size.h, outlineRect))} />
             <IconButton icon="square" label="احتواء الـ Em" onClick={() => setViewport(fitViewport(upm, size.w, size.h))} />
-          </div>
-
-          <div className="canvas-view-label" aria-hidden="true">
-            <span>لوحة الرسم</span>
-            <strong>{selected?.glyphName ?? "—"}</strong>
-            <small>EM {upm}</small>
           </div>
 
           <div className="ws-canvas-wrap" ref={wrapRef}>
@@ -877,6 +905,9 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
             width={size.w}
             height={size.h}
             viewBox={`0 0 ${size.w} ${size.h}`}
+            role="img"
+            tabIndex={0}
+            aria-label={`مساحة رسم الخانة ${selected?.characterName ?? "غير المحددة"}، ${FORM_LABELS[selected?.form ?? ""] ?? ""}، ${upm} وحدة لكل Em. استخدم شريط الأدوات أو لوحة الخصائص لتعديل القيم رقمياً.`}
             onWheel={(event) => {
               event.preventDefault();
               setViewport((current) => zoomAt(current, Math.exp(-event.deltaY * 0.0015), localPoint(event)));
@@ -889,6 +920,12 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
             onPointerUp={onPointerUp}
             onContextMenu={(event) => event.preventDefault()}
           >
+            <title>مساحة رسم الخانة</title>
+            <desc>
+              {selected
+                ? `${selected.characterName}، ${FORM_LABELS[selected.form] ?? selected.form}، العرض التقدّمي ${selected.metrics.advanceWidth} وحدة، ${selected.anchors.length} مرساة.`
+                : "لا توجد خانة محددة."}
+            </desc>
             <defs>
               <pattern id="canvas-dots" width="24" height="24" patternUnits="userSpaceOnUse">
                 <circle cx="1" cy="1" r="0.8" className="canvas-dot" />
@@ -1066,20 +1103,49 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
           </svg>
           </div>
 
-          <div className="ws-status-strip">
+          <div className="ws-status-strip" role="status" aria-live="polite" aria-label="حالة مساحة الرسم">
             <span className={`status-dot ${snap ? "" : "muted"}`} />
             <span>{pointer ? `X ${round(pointer.x)} · Y ${round(pointer.y)} FU` : "X — · Y — FU"}</span>
             <ToolbarDivider />
-            <span>{Math.round(viewport.zoom * 100)}%</span>
+            <span>تكبير {Math.round(viewport.zoom * 100)}%</span>
             <ToolbarDivider />
             <span>{snap?.active[0] ? `التقاط: ${snap.active[0].label}` : prefs.snapEnabled ? "الالتقاط مفعّل" : "الالتقاط متوقف"}</span>
+            <ToolbarDivider />
+            <span>حفظ آمن</span>
             <span style={{ flex: 1 }} />
-            <span>{selected ? `${selected.characterName} — ${FORM_LABELS[selected.form] ?? selected.form}` : "لا يوجد رسم"}</span>
+            <span>{selected ? `${selected.characterName} — ${FORM_LABELS[selected.form] ?? selected.form} · ${selected.anchors.length} مرساة` : "لا يوجد رسم"}</span>
           </div>
         </div>
 
-        <aside className="ws-properties">
-          <AccordionSection
+        <Inspector subtitle={selected ? selected.glyphName : "لا توجد خانة"}>
+          <InspectorSection
+            title="الاستيراد"
+            icon="upload"
+            open={openSections.import}
+            onToggle={() => toggleSection("import")}
+            badge={selected?.sourceRevisions.length ?? 0}
+          >
+            {selected ? (
+              <>
+                <div className="kv">
+                  <div><span>الملف</span><code dir="ltr">{selected.originalSvg ?? "—"}</code></div>
+                  <div><span>الوضع</span><code dir="ltr">{selected.import?.mode ?? "—"}</code></div>
+                  <div><span>المراجعات</span><code>{selected.sourceRevisions.length}</code></div>
+                  <div><span>الحدود</span><code dir="ltr">{selected.import ? selected.import.contours : 0} / {selected.import ? selected.import.segments : 0}</code></div>
+                </div>
+                {onOpenInventory ? (
+                  <div className="button-row wrap">
+                    <button type="button" onClick={onOpenInventory}>استبدال أو استيراد من المخزون</button>
+                  </div>
+                ) : null}
+                <p className="hint">هوية الخانة تأتي من المشروع؛ اسم ملف SVG لا يغيّرها. الاستبدال يحتفظ بالمراسي والقياسات ويعلّم الهندسة المتغيّرة للمراجعة.</p>
+              </>
+            ) : (
+              <p className="hint">لا توجد خانة محددة.</p>
+            )}
+          </InspectorSection>
+
+          <InspectorSection
             title="خصائص الخانة"
             icon="sliders"
             open={openSections.slot}
@@ -1114,9 +1180,63 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
           ) : (
             <p className="hint">لا توجد خانة محددة.</p>
           )}
-          </AccordionSection>
+          </InspectorSection>
 
-          <AccordionSection
+          <InspectorSection
+            title="خطوط القياس"
+            icon="ruler"
+            open={openSections.metrics}
+            onToggle={() => toggleSection("metrics")}
+            badge={METRIC_ROWS.length}
+          >
+          <ul className="metric-list">
+            {METRIC_ROWS.map((row) => {
+              const value = metricValue(metrics, row.key);
+              return (
+                <li key={row.key}>
+                  <span>{row.label}</span>
+                  <input
+                    type="number"
+                    value={value ?? ""}
+                    placeholder="—"
+                    onChange={(event) => {
+                      const raw = event.target.value;
+                      const value = raw === "" ? null : Number(raw);
+                      patchProject((current) => ({ ...current, metrics: setMetricValue(current.metrics, row.key, value) }));
+                      commitEdit(() => api.setMetrics(project.path, setMetricValue(metrics, row.key, value)));
+                    }}
+                  />
+                  <IconButton
+                    icon={metrics.metricLocks[row.key] ? "lock" : "unlock"}
+                    label={metrics.metricLocks[row.key] ? "فتح القفل" : "قفل"}
+                    onClick={() => {
+                      const locked = !metrics.metricLocks[row.key];
+                      patchProject((current) => ({
+                        ...current,
+                        metrics: { ...current.metrics, metricLocks: { ...current.metrics.metricLocks, [row.key]: locked } },
+                      }));
+                      commitEdit(() => api.setMetrics(project.path, { ...metrics, metricLocks: { ...metrics.metricLocks, [row.key]: locked } }));
+                    }}
+                  />
+                  <IconButton
+                    icon={metrics.metricVisibility[row.key] !== false ? "eye" : "eyeOff"}
+                    label={metrics.metricVisibility[row.key] !== false ? "إخفاء" : "إظهار"}
+                    onClick={() => {
+                      const visible = metrics.metricVisibility[row.key] === false;
+                      patchProject((current) => ({
+                        ...current,
+                        metrics: { ...current.metrics, metricVisibility: { ...current.metrics.metricVisibility, [row.key]: visible } },
+                      }));
+                      commitEdit(() => api.setMetrics(project.path, { ...metrics, metricVisibility: { ...metrics.metricVisibility, [row.key]: visible } }));
+                    }}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+          </InspectorSection>
+
+          <InspectorSection
             title="المراسي"
             icon="anchor"
             open={openSections.anchors}
@@ -1200,9 +1320,9 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
               })}
             </ul>
           )}
-          </AccordionSection>
+          </InspectorSection>
 
-          <AccordionSection
+          <InspectorSection
             title="الأدلة"
             icon="guide"
             open={openSections.guides}
@@ -1239,63 +1359,9 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
               ))}
             </ul>
           )}
-          </AccordionSection>
+          </InspectorSection>
 
-          <AccordionSection
-            title="خطوط القياس"
-            icon="ruler"
-            open={openSections.metrics}
-            onToggle={() => toggleSection("metrics")}
-            badge={METRIC_ROWS.length}
-          >
-          <ul className="metric-list">
-            {METRIC_ROWS.map((row) => {
-              const value = metricValue(metrics, row.key);
-              return (
-                <li key={row.key}>
-                  <span>{row.label}</span>
-                  <input
-                    type="number"
-                    value={value ?? ""}
-                    placeholder="—"
-                    onChange={(event) => {
-                      const raw = event.target.value;
-                      const value = raw === "" ? null : Number(raw);
-                      patchProject((current) => ({ ...current, metrics: setMetricValue(current.metrics, row.key, value) }));
-                      commitEdit(() => api.setMetrics(project.path, setMetricValue(metrics, row.key, value)));
-                    }}
-                  />
-                  <IconButton
-                    icon={metrics.metricLocks[row.key] ? "lock" : "unlock"}
-                    label={metrics.metricLocks[row.key] ? "فتح القفل" : "قفل"}
-                    onClick={() => {
-                      const locked = !metrics.metricLocks[row.key];
-                      patchProject((current) => ({
-                        ...current,
-                        metrics: { ...current.metrics, metricLocks: { ...current.metrics.metricLocks, [row.key]: locked } },
-                      }));
-                      commitEdit(() => api.setMetrics(project.path, { ...metrics, metricLocks: { ...metrics.metricLocks, [row.key]: locked } }));
-                    }}
-                  />
-                  <IconButton
-                    icon={metrics.metricVisibility[row.key] !== false ? "eye" : "eyeOff"}
-                    label={metrics.metricVisibility[row.key] !== false ? "إخفاء" : "إظهار"}
-                    onClick={() => {
-                      const visible = metrics.metricVisibility[row.key] === false;
-                      patchProject((current) => ({
-                        ...current,
-                        metrics: { ...current.metrics, metricVisibility: { ...current.metrics.metricVisibility, [row.key]: visible } },
-                      }));
-                      commitEdit(() => api.setMetrics(project.path, { ...metrics, metricVisibility: { ...metrics.metricVisibility, [row.key]: visible } }));
-                    }}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-          </AccordionSection>
-
-          <AccordionSection
+          <InspectorSection
             title="الشبكة والالتقاط"
             icon="magnet"
             open={openSections.snap}
@@ -1328,8 +1394,51 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
             ))}
           </ul>
           <p className="hint">Alt لتعطيل الالتقاط مؤقتاً · Shift لتقييد الحركة على محور واحد.</p>
-          </AccordionSection>
-        </aside>
+          </InspectorSection>
+
+          <InspectorSection
+            title="التحقق"
+            icon="listChecks"
+            open={openSections.validation}
+            onToggle={() => toggleSection("validation")}
+            badge={(selected?.validation.length ?? 0) + (selected?.import?.findings.length ?? 0)}
+            tone={selected?.validation.some((finding) => finding.severity === "error") ? "danger" : "neutral"}
+          >
+            {[
+              ...(selected?.import?.findings ?? []),
+              ...(selected?.validation ?? []),
+            ].length === 0 ? (
+              <p className="hint">لا توجد ملاحظات تحقق على هذه الخانة.</p>
+            ) : (
+              <ul className="finding-list">
+                {[
+                  ...(selected?.import?.findings ?? []),
+                  ...(selected?.validation ?? []),
+                ].map((finding, index) => (
+                  <li key={`${finding.code}-${index}`} className={finding.severity}>
+                    <strong>{finding.code}</strong>
+                    <span>{finding.message}</span>
+                    {finding.hint ? <small>{finding.hint}</small> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </InspectorSection>
+
+          <InspectorSection
+            title="السجل"
+            icon="history"
+            open={openSections.history}
+            onToggle={() => toggleSection("history")}
+            badge={past.length}
+          >
+            <div className="button-row wrap">
+              <button type="button" disabled={!canUndo} onClick={undo}>تراجع</button>
+              <button type="button" disabled={!canRedo} onClick={redo}>إعادة</button>
+            </div>
+            <p className="hint">آخر الحفظ: {new Date(project.project.updatedAt).toLocaleString("ar")} · {past.length} خطوة قابلة للتراجع.</p>
+          </InspectorSection>
+        </Inspector>
       </div>
     </div>
   );

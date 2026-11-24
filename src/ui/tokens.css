@@ -1,4 +1,9 @@
-/* FONTYPE design tokens — one source of truth for the professional dark UI. */
+/* ==========================================================================
+   FONTYPE — design tokens
+   Neutral, desktop-studio palette. One source of truth for the Phase 7 UI.
+   Color rule: neutral grays carry the interface; blue is reserved for focus,
+   selection and active state; green appears only for the `ready` state.
+   ========================================================================== */
 :root {
   color-scheme: dark;
 
@@ -7,78 +12,114 @@
   --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
   --font-display: "Noto Naskh Arabic", "IBM Plex Sans Arabic", serif;
 
-  /* Canvas & surfaces — layered like a desktop design tool */
-  --bg-app: #080b10;
-  --bg-app-2: #0d1219;
-  --surface: #121922;
-  --surface-2: #18212c;
-  --surface-3: #202b38;
-  --surface-4: #293646;
-  --surface-glass: rgba(18, 25, 34, 0.94);
-  --input-bg: #0b1118;
-  --canvas-bg: #0a0f16;
+  /* Neutral surfaces — solid, layered like a desktop tool */
+  --bg-app: #1b1b1b;
+  --bg-app-2: #202020;
+  --bg-deep: #141414;
+  --surface: #252525;
+  --surface-2: #2c2c2c;
+  --surface-3: #353535;
+  --surface-4: #3f3f3f;
+  --surface-glass: #252525; /* solid — no glassmorphism */
+  --input-bg: #1a1a1a;
+  --canvas-bg: #141414;
 
-  /* Strokes */
-  --line: #222c38;
-  --border: #2c3948;
-  --border-strong: #405166;
-  --border-subtle: #1b2530;
-  --line-soft: rgba(255, 255, 255, 0.055);
+  /* Hairlines — 1px, never colored borders */
+  --line: #383838;
+  --line-soft: #2f2f2f;
+  --border: #3a3a3a;
+  --border-strong: #737373; /* ≥ 3:1 on dark controls */
+  --border-subtle: #303030;
 
-  /* Text */
-  --text: #eaf0f6;
-  --text-2: #c6d2df;
-  --muted: #93a5b8;
-  --text-subtle: #6d8095;
+  /* Text — all pairs meet WCAG AA on the surfaces above */
+  --text: #f2f2f2;
+  --text-2: #c8c8c8;
+  --muted: #9a9a9a;
+  --text-subtle: #8f8f8f; /* ≥ 4.5:1 on #252525 */
 
-  /* Accents & semantics */
-  --accent: #4fd1b0;
-  --accent-dark: #2d8f7a;
-  --accent-soft: rgba(79, 209, 176, 0.13);
-  --accent-glow: rgba(79, 209, 176, 0.26);
-  --accent-2: #6da8f5;
-  --accent-2-soft: rgba(109, 168, 245, 0.14);
-  --info: #74a9e8;
-  --info-soft: rgba(116, 169, 232, 0.14);
-  --warning: #e8b85c;
-  --warning-soft: rgba(232, 184, 92, 0.14);
-  --danger: #f27a72;
-  --danger-soft: rgba(242, 122, 114, 0.14);
-  --violet: #a48be8;
-  --violet-soft: rgba(164, 139, 232, 0.14);
+  /* Functional accents */
+  --accent: #4b9fff; /* focus, selection, active tab */
+  --accent-dark: #2f6fb5;
+  --accent-soft: rgba(75, 159, 255, 0.14);
+  --accent-glow: transparent; /* removed */
+  --accent-2: #6fa8ff;
+  --accent-2-soft: rgba(111, 168, 255, 0.14);
 
-  /* Spacing */
+  /* Semantic states */
+  --ok: #6fbf9a; /* ready only */
+  --ok-dark: #3f7d63;
+  --ok-soft: rgba(111, 191, 154, 0.14);
+  --info: #6fa8ff;
+  --info-soft: rgba(111, 168, 255, 0.13);
+  --warning: #d9a441;
+  --warning-soft: rgba(217, 164, 65, 0.13);
+  --danger: #e46a6a;
+  --danger-soft: rgba(228, 106, 106, 0.13);
+  --violet: #b18ce0;
+  --violet-soft: rgba(177, 140, 224, 0.13);
+
+  /* Spacing — tight, tool-like */
   --sp-0: 0;
-  --sp-1: 4px;
-  --sp-2: 8px;
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-5: 24px;
-  --sp-6: 32px;
+  --sp-1: 3px;
+  --sp-2: 6px;
+  --sp-3: 9px;
+  --sp-4: 12px;
+  --sp-5: 18px;
+  --sp-6: 24px;
 
-  /* Radii — tighter than a web app, closer to a desktop tool */
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 9px;
-  --r-lg: 13px;
+  /* Radii — 2–4px, no pills on chrome */
+  --r-xs: 2px;
+  --r-sm: 3px;
+  --r-md: 4px;
+  --r-lg: 6px;
   --r-pill: 999px;
 
-  /* Elevation */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
-  --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6);
-  --shadow-inset: inset 0 1px 0 var(--line-soft);
+  /* Elevation — overlays only; no card shadows */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.55);
+  --shadow-3: 0 14px 42px rgba(0, 0, 0, 0.65);
+  --shadow-inset: none;
 
-  /* Density / layout metrics */
-  --topbar-h: 48px;
-  --statusbar-h: 28px;
-  --activity-w: 54px;
-  --rail-w: 44px;
-  --sidebar-w: 286px;
-  --inspector-w: 302px;
-  --panel-head-h: 40px;
-  --control-h: 30px;
+  /* Layout metrics */
+  --menubar-h: 26px;
+  --toolbar-h: 38px;
+  --topbar-h: 64px; /* menu + toolbar; used by overlays */
+  --statusbar-h: 24px;
+  --tabbar-h: 30px;
+  --activity-w: 0px; /* retired activity rail */
+  --rail-w: 40px;
+  --sidebar-w: 272px;
+  --inspector-w: 292px;
+  --panel-head-h: 30px;
+  --control-h: 26px;
 
-  --transition: 140ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  --transition: 120ms ease-out;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Accessibility: honor reduced-motion across the whole studio. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --transition: 0ms linear; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Windows high-contrast / forced-colors: keep controls visible. */
+@media (forced-colors: active) {
+  :focus-visible { outline: 2px solid Highlight; }
+  .ui-button, .icon-btn, .panel, .dock, .menu-popup, .modal-card,
+  .command-palette, .status-chip, .accordion-badge, .kbd { border: 1px solid CanvasText; }
+  .ruler, .ws-canvas, .inspector-head, .panel-header { border-color: CanvasText; }
+  .metric-line, .workspace-guide, .workspace-artwork, .anchor-marker circle,
+  .anchor-connection, .em-frame { forced-color-adjust: none; }
+  .metric-line { stroke: CanvasText; }
+  .workspace-guide, .workspace-artwork, .anchor-marker circle,
+  .anchor-connection { stroke: Highlight; }
+  .workspace-artwork { fill: CanvasText; }
+  .anchor-marker circle { fill: Canvas; }
+  .em-frame { stroke: CanvasText; }
 }

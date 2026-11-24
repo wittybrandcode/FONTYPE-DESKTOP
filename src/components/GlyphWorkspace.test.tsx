@@ -87,4 +87,19 @@ describe("redesigned glyph workspace", () => {
     expect(html).not.toContain("🔒");
     expect(html).not.toContain("✕");
   });
+
+  it("keeps inspector folds in the Transform → Metrics → Anchors → Validation order", () => {
+    const html = renderToStaticMarkup(
+      <GlyphWorkspace project={fixture()} onProject={() => {}} onNotice={() => {}} />,
+    );
+    const positions = [
+      html.indexOf(">الاستيراد</span>"),
+      html.indexOf(">خصائص الخانة</span>"),
+      html.indexOf(">خطوط القياس</span>"),
+      html.indexOf(">المراسي</span>"),
+      html.indexOf(">التحقق</span>"),
+    ];
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
 });

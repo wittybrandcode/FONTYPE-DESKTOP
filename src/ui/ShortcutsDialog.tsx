@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Icon } from "./icons";
-import { Kbd } from "./components";
+import { Kbd, useFocusTrap } from "./components";
 
 const GROUPS: Array<{ title: string; items: Array<{ keys: string[]; label: string }> }> = [
   {
@@ -8,6 +8,11 @@ const GROUPS: Array<{ title: string; items: Array<{ keys: string[]; label: strin
     items: [
       { keys: ["V"], label: "أداة التحديد" },
       { keys: ["H"], label: "أداة التحريك" },
+      { keys: ["A"], label: "إظهار المراسي" },
+      { keys: ["G"], label: "إظهار الأدلة" },
+      { keys: ["R"], label: "المساطر" },
+      { keys: ["D"], label: "الشبكة" },
+      { keys: ["S"], label: "الالتقاط الذكي" },
       { keys: ["Space"], label: "تحريك مؤقت أثناء السحب" },
       { keys: ["+", "−"], label: "تكبير / تصغير" },
       { keys: ["0"], label: "احتواء الرسم" },
@@ -33,6 +38,7 @@ interface Props {
 }
 
 export default function ShortcutsDialog({ open, onClose }: Props) {
+  const trapRef = useFocusTrap(open);
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
@@ -46,6 +52,7 @@ export default function ShortcutsDialog({ open, onClose }: Props) {
   return (
     <div className="modal-backdrop" onPointerDown={onClose}>
       <div
+        ref={trapRef}
         className="modal-card shortcuts-dialog"
         role="dialog"
         aria-modal="true"
