@@ -3,6 +3,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { runEngineJob } from "../core/api";
 import type { EngineEvent } from "../core/protocol";
 import type { ProjectHandle } from "../core/types";
+import { PanelHeader, SectionLabel, StatusChip } from "../ui/components";
+import { Icon } from "../ui/icons";
 
 interface Props {
   project: ProjectHandle | null;
@@ -50,9 +52,7 @@ export default function SpikePanel({ project, onNotice }: Props) {
 
     const params: Record<string, unknown> = {
       svgPath,
-      outputDir: project
-        ? `${project.path}/reports/spike-${Date.now()}`
-        : `fontype-spike-${Date.now()}`,
+      outputDir: project ? `${project.path}/reports/spike-${Date.now()}` : `fontype-spike-${Date.now()}`,
       upm: project?.project.font.unitsPerEm ?? 1000,
       ascender: project?.project.metrics.ascender,
       descender: project?.project.metrics.descender,
@@ -97,82 +97,102 @@ export default function SpikePanel({ project, onNotice }: Props) {
   const shaping = (result?.shaping ?? {}) as { glyphs?: string[] };
 
   return (
-    <div className="panel">
-      <h2>الاختبار الرأسي للمحرك</h2>
-      <p className="hint">
-        إثبات المسار كاملاً من ملف SVG واحد إلى خطين مُجمّعين وفحص التشكيل — بدون واجهة تحرير بعد.
-      </p>
+    <section className="panel diagnostic-panel">
+      <PanelHeader
+        icon="lightning"
+        title="الاختبار الرأسي للمحرك"
+        subtitle="من SVG واحد إلى خط مُجمّع وفحص تشكيل"
+        actions={<StatusChip tone="info" icon="shield">محلي</StatusChip>}
+      />
 
-      <label>ملف SVG لحرف الباء</label>
-      <div className="button-row">
-        <button onClick={pickSvg}>اختيار ملف</button>
-        <input
-          className="path-input"
-          readOnly
-          value={svgPath}
-          placeholder="لم يتم اختيار ملف"
-        />
-      </div>
-
-      <button className="primary wide" onClick={run} disabled={running || !svgPath}>
-        {running ? "جارٍ التنفيذ…" : "تشغيل الاختبار الرأسي"}
-      </button>
-
-      {(running || result || error) && (
-        <div className="progress-block">
-          <div className="progress-track"><div style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-          <div className="progress-label">{message}</div>
-        </div>
-      )}
-
-      {error ? <div className="alert error">{error}</div> : null}
-
-      {result ? (
-        <div className="result-block">
-          <div className={`status-badge ${result.success ? "ok" : "error"}`}>
-            {result.success ? "كل الفحوص نجحت" : "بعض الفحوص فشلت"}
+      <div className="panel-body diagnostic-layout">
+        <div className="diagnostic-input">
+          <SectionLabel icon="upload">المدخل</SectionLabel>
+          <label>ملف SVG لحرف الباء</label>
+          <div className="file-picker">
+            <button type="button" onClick={() => void pickSvg()}>
+              <Icon name="folderOpen" size={15} /> اختيار ملف
+            </button>
+            <input className="path-input" readOnly value={svgPath} placeholder="لم يتم اختيار ملف" />
           </div>
 
-          <h3>الفحوص</h3>
-          <ul className="check-list">
-            {Object.entries(checks).map(([key, value]) => (
-              <li key={key} className={value ? "pass" : "fail"}>
-                <span>{value ? "✓" : "✕"}</span>
-                {CHECK_LABELS[key] ?? key}
-              </li>
-            ))}
-          </ul>
+          <div className="hint-card">
+            <Icon name="info" size={15} />
+            <span>يستخدم الاختبار إعدادات المشروع الحالي إن كان مفتوحاً، وإلا قيماً افتراضية.</span>
+          </div>
 
-          {shaping.glyphs ? (
-            <p className="hint">نتيجة التشكيل: <code>{shaping.glyphs.join(" ")}</code></p>
-          ) : null}
+          <button className="primary wide" onClick={() => void run()} disabled={running || !svgPath}>
+            {running ? <Icon name="spinner" size={16} /> : <Icon name="play" size={16} />}
+            {running ? "جارٍ التنفيذ…" : "تشغيل الاختبار الرأسي"}
+          </button>
 
-          <h3>الملفات الناتجة</h3>
-          <ul className="tool-list">
-            {Object.entries(artifacts).map(([format, path]) => (
-              <li key={format}><span>{format.toUpperCase()}</span><code className="path">{path}</code></li>
-            ))}
-          </ul>
+          {(running || result || error) && (
+            <div className="progress-block">
+              <div className="progress-track"><div style={{ width: `${Math.round(progress * 100)}%` }} /></div>
+              <div className="progress-label">{message}</div>
+            </div>
+          )}
+          {error ? <div className="alert error">{error}</div> : null}
+        </div>
 
-          {findings.length > 0 ? (
+        <div className="diagnostic-output">
+          <SectionLabel icon="listChecks">النتيجة</SectionLabel>
+          {result ? (
             <>
-              <h3>ملاحظات الاستيراد</h3>
-              <ul className="finding-list">
-                {findings.map((finding, index) => (
-                  <li key={index} className={finding.severity}>{finding.message}</li>
+              <div className={`result-banner ${result.success ? "is-success" : "is-failure"}`}>
+                <Icon name={result.success ? "checkCircle" : "warning"} size={20} />
+                <div>
+                  <strong>{result.success ? "كل الفحوص نجحت" : "بعض الفحوص فشلت"}</strong>
+                  <small>{Object.values(checks).filter(Boolean).length} من {Object.keys(checks).length} فحوص</small>
+                </div>
+              </div>
+
+              <ul className="check-list">
+                {Object.entries(checks).map(([key, value]) => (
+                  <li key={key} className={value ? "pass" : "fail"}>
+                    <span className="check-mark"><Icon name={value ? "check" : "close"} size={12} /></span>
+                    {CHECK_LABELS[key] ?? key}
+                  </li>
                 ))}
               </ul>
-            </>
-          ) : null}
 
-          {logs.length > 0 ? (
-            <details>
-              <summary>سجل المترجم ({logs.length} سطر)</summary>
-              <pre>{logs.join("\n")}</pre>
-            </details>
-          ) : null}
+              {shaping.glyphs ? (
+                <div className="code-line">نتيجة التشكيل: <code>{shaping.glyphs.join(" ")}</code></div>
+              ) : null}
+
+              <SectionLabel icon="fileText">الملفات الناتجة</SectionLabel>
+              <ul className="tool-list">
+                {Object.entries(artifacts).map(([format, path]) => (
+                  <li key={format}><span>{format.toUpperCase()}</span><code className="path">{path}</code></li>
+                ))}
+              </ul>
+
+              {findings.length > 0 ? (
+                <>
+                  <SectionLabel icon="warning">ملاحظات الاستيراد</SectionLabel>
+                  <ul className="finding-list">
+                    {findings.map((finding, index) => (
+                      <li key={index} className={finding.severity}>{finding.message}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
+              {logs.length > 0 ? (
+                <details>
+                  <summary>سجل المترجم ({logs.length} سطر)</summary>
+                  <pre>{logs.join("\n")}</pre>
+                </details>
+              ) : null}
+            </>
+          ) : (
+            <div className="result-placeholder">
+              <Icon name="target" size={24} />
+              <p>شغّل الاختبار لعرض الفحوص والملفات الناتجة هنا.</p>
+            </div>
+          )}
         </div>
-      ) : null}
-    </div>
+      </div>
+    </section>
   );
 }

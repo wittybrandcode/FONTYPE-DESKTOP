@@ -1,47 +1,54 @@
-/* FONTYPE design tokens — single source of truth for the visual language. */
+/* FONTYPE design tokens — one source of truth for the professional dark UI. */
 :root {
   color-scheme: dark;
 
   /* Typography */
   --font-ui: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
-  --font-mono: Consolas, "JetBrains Mono", "Courier New", monospace;
+  --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
   --font-display: "Noto Naskh Arabic", "IBM Plex Sans Arabic", serif;
 
-  /* Surfaces */
-  --bg-app: #0a0e13;
-  --bg-app-2: #0d131a;
-  --surface: #141c25;
-  --surface-2: #1a2430;
-  --surface-3: #22303e;
-  --surface-glass: rgba(20, 28, 37, 0.94);
-  --input-bg: #0d141c;
-  --canvas-bg: #090e14;
+  /* Canvas & surfaces — layered like a desktop design tool */
+  --bg-app: #080b10;
+  --bg-app-2: #0d1219;
+  --surface: #121922;
+  --surface-2: #18212c;
+  --surface-3: #202b38;
+  --surface-4: #293646;
+  --surface-glass: rgba(18, 25, 34, 0.94);
+  --input-bg: #0b1118;
+  --canvas-bg: #0a0f16;
 
-  /* Borders */
-  --line: #2b3947;
-  --border: #33414f;
-  --border-strong: #46596b;
-  --border-subtle: #222e3a;
+  /* Strokes */
+  --line: #222c38;
+  --border: #2c3948;
+  --border-strong: #405166;
+  --border-subtle: #1b2530;
+  --line-soft: rgba(255, 255, 255, 0.055);
 
   /* Text */
-  --text: #e8eef5;
-  --text-2: #c8d5e3;
-  --muted: #94a7bb;
-  --text-subtle: #6f8295;
+  --text: #eaf0f6;
+  --text-2: #c6d2df;
+  --muted: #93a5b8;
+  --text-subtle: #6d8095;
 
-  /* Semantic colors */
-  --accent: #4cc2a5;
-  --accent-dark: #2f8f7a;
-  --accent-soft: rgba(76, 194, 165, 0.14);
-  --accent-glow: rgba(76, 194, 165, 0.28);
-  --info: #6b9fd6;
-  --info-soft: rgba(107, 159, 214, 0.14);
-  --warning: #e3b341;
-  --warning-soft: rgba(227, 179, 65, 0.14);
-  --danger: #f0736a;
-  --danger-soft: rgba(240, 115, 106, 0.14);
+  /* Accents & semantics */
+  --accent: #4fd1b0;
+  --accent-dark: #2d8f7a;
+  --accent-soft: rgba(79, 209, 176, 0.13);
+  --accent-glow: rgba(79, 209, 176, 0.26);
+  --accent-2: #6da8f5;
+  --accent-2-soft: rgba(109, 168, 245, 0.14);
+  --info: #74a9e8;
+  --info-soft: rgba(116, 169, 232, 0.14);
+  --warning: #e8b85c;
+  --warning-soft: rgba(232, 184, 92, 0.14);
+  --danger: #f27a72;
+  --danger-soft: rgba(242, 122, 114, 0.14);
+  --violet: #a48be8;
+  --violet-soft: rgba(164, 139, 232, 0.14);
 
-  /* Spacing scale */
+  /* Spacing */
+  --sp-0: 0;
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -49,23 +56,29 @@
   --sp-5: 24px;
   --sp-6: 32px;
 
-  /* Radii */
-  --r-xs: 5px;
-  --r-sm: 8px;
-  --r-md: 11px;
-  --r-lg: 16px;
+  /* Radii — tighter than a web app, closer to a desktop tool */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 9px;
+  --r-lg: 13px;
   --r-pill: 999px;
 
   /* Elevation */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.5);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6);
+  --shadow-inset: inset 0 1px 0 var(--line-soft);
 
-  /* Layout metrics */
-  --topbar-h: 58px;
-  --statusbar-h: 30px;
-  --rail-w: 58px;
-  --inspector-w: 320px;
+  /* Density / layout metrics */
+  --topbar-h: 48px;
+  --statusbar-h: 28px;
+  --activity-w: 54px;
+  --rail-w: 44px;
+  --sidebar-w: 286px;
+  --inspector-w: 302px;
+  --panel-head-h: 40px;
+  --control-h: 30px;
 
-  --transition: 150ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  --transition: 140ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }

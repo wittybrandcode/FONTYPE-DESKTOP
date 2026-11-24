@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../core/api";
 import type { ProjectHandle } from "../core/types";
+import { PanelHeader, SectionLabel } from "../ui/components";
+import { Icon } from "../ui/icons";
 
 interface Props {
   project: ProjectHandle | null;
@@ -97,61 +99,80 @@ export default function ProjectPanel({ project, onProject, onNotice }: Props) {
   }
 
   return (
-    <div className="panel">
-      <h2>المشروع</h2>
-      <p className="hint">كل مشروع مجلد قابل للنقل بصيغة <code>.afsp</code>.</p>
+    <section className="panel project-panel">
+      <PanelHeader
+        icon="folderOpen"
+        title="المشروع"
+        subtitle="مجلد قابل للنقل بصيغة .afsp"
+        actions={<span className="panel-index">01</span>}
+      />
 
-      <label>اسم المشروع</label>
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: خط الربيع" />
+      <div className="panel-body">
+        <SectionLabel icon="sparkle">إنشاء مشروع</SectionLabel>
+        <div className="form-stack">
+          <label>اسم المشروع</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: خط الربيع" />
 
-      <label>اسم العائلة</label>
-      <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="Arabic Spring" />
+          <label>اسم العائلة</label>
+          <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="Arabic Spring" />
 
-      <label>النمط</label>
-      <input value={style} onChange={(e) => setStyle(e.target.value)} />
-
-      <label>وحدات لكل Em (UPM)</label>
-      <select value={upm} onChange={(e) => setUpm(Number(e.target.value))}>
-        <option value={1000}>1000 — الافتراضي</option>
-        <option value={2048}>2048</option>
-      </select>
-
-      <div className="button-row">
-        <button className="primary" onClick={createProject} disabled={!name.trim()}>
-          إنشاء مشروع
-        </button>
-        <button onClick={openProject}>فتح</button>
-        <button onClick={saveProject} disabled={!project}>
-          حفظ
-        </button>
-      </div>
-
-      {project ? (
-        <div className="project-card">
-          <div className="project-card-title">{project.project.font.familyName}</div>
-          <dl>
-            <div><dt>المسار</dt><dd className="path">{project.path}</dd></div>
-            <div><dt>المخطط</dt><dd>{project.project.schemaVersion}</dd></div>
-            <div><dt>UPM</dt><dd>{project.project.font.unitsPerEm}</dd></div>
-            <div><dt>الخانات</dt><dd>{project.project.glyphSlots.length}</dd></div>
-          </dl>
-
-          <h3>بيانات التصدير</h3>
-          <label>الإصدار</label>
-          <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.000" dir="ltr" />
-          <label>المصمم</label>
-          <input value={designer} onChange={(e) => setDesigner(e.target.value)} placeholder="اسم المصمم" />
-          <label>حقوق النشر</label>
-          <input value={copyright} onChange={(e) => setCopyright(e.target.value)} placeholder="Copyright …" dir="ltr" />
-          <label>الترخيص</label>
-          <input value={license} onChange={(e) => setLicense(e.target.value)} placeholder="OFL-1.1" dir="ltr" />
-          <div className="button-row">
-            <button onClick={() => void saveExportMetadata()}>حفظ بيانات التصدير</button>
+          <div className="form-row">
+            <div>
+              <label>النمط</label>
+              <input value={style} onChange={(e) => setStyle(e.target.value)} />
+            </div>
+            <div>
+              <label>UPM</label>
+              <select value={upm} onChange={(e) => setUpm(Number(e.target.value))}>
+                <option value={1000}>1000</option>
+                <option value={2048}>2048</option>
+              </select>
+            </div>
           </div>
         </div>
-      ) : (
-        <div className="empty-card">لا يوجد مشروع مفتوح حالياً.</div>
-      )}
-    </div>
+
+        <div className="button-row">
+          <button className="primary" onClick={() => void createProject()} disabled={!name.trim()}>
+            إنشاء مشروع
+          </button>
+          <button onClick={() => void openProject()}>فتح</button>
+          <button onClick={() => void saveProject()} disabled={!project}>حفظ</button>
+        </div>
+
+        {project ? (
+          <div className="project-card">
+            <div className="project-card-title">
+              <span className="project-avatar">{project.project.font.familyName.slice(0, 1)}</span>
+              <span>
+                <strong>{project.project.font.familyName}</strong>
+                <small>{project.project.font.styleName} · {project.project.font.unitsPerEm} UPM</small>
+              </span>
+            </div>
+            <div className="data-list">
+              <div><span>المسار</span><code className="path">{project.path}</code></div>
+              <div><span>المخطط</span><code>{project.project.schemaVersion}</code></div>
+              <div><span>الخانات</span><code>{project.project.glyphSlots.length}</code></div>
+            </div>
+
+            <SectionLabel icon="fileText">بيانات التصدير</SectionLabel>
+            <div className="form-stack">
+              <label>الإصدار</label>
+              <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.000" dir="ltr" />
+              <label>المصمم</label>
+              <input value={designer} onChange={(e) => setDesigner(e.target.value)} placeholder="اسم المصمم" />
+              <label>حقوق النشر</label>
+              <input value={copyright} onChange={(e) => setCopyright(e.target.value)} placeholder="Copyright …" dir="ltr" />
+              <label>الترخيص</label>
+              <input value={license} onChange={(e) => setLicense(e.target.value)} placeholder="OFL-1.1" dir="ltr" />
+            </div>
+            <div className="button-row">
+              <button onClick={() => void saveExportMetadata()}>حفظ بيانات التصدير</button>
+            </div>
+          </div>
+        ) : (
+          <div className="empty-card"><Icon name="info" size={14} /> لا يوجد مشروع مفتوح حالياً.</div>
+        )}
+      </div>
+    </section>
   );
 }

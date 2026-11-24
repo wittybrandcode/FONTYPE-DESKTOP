@@ -9,6 +9,8 @@ import {
 } from "../core/api";
 import type { EngineEvent } from "../core/protocol";
 import type { BuildRecord, ProjectHandle, ValidationFinding } from "../core/types";
+import { EmptyState, PanelHeader, SectionLabel, StatusChip } from "../ui/components";
+import { Icon } from "../ui/icons";
 
 interface Props {
   project: ProjectHandle | null;
@@ -224,9 +226,13 @@ export default function BuildPanel({ project, onProject, onNotice, onOpenSlot }:
 
   if (!project) {
     return (
-      <div className="panel">
-        <h2>البناء والمعاينة</h2>
-        <p className="hint">افتح مشروعاً لبناء الخط وتشغيل اختبارات التشكيل.</p>
+      <div className="panel build-panel">
+        <PanelHeader icon="pulse" title="البناء والمعاينة" subtitle="توليد الخط وفحص التشكيل" />
+        <EmptyState
+          icon="pulse"
+          title="لا يوجد مشروع مفتوح"
+          description="افتح مشروعاً أو أنشئه لبناء OTF وTTF وتشغيل اختبارات التشكيل محلياً."
+        />
       </div>
     );
   }
@@ -242,13 +248,16 @@ export default function BuildPanel({ project, onProject, onNotice, onOpenSlot }:
 
   return (
     <div className="panel build-panel">
-      <h2>البناء والمعاينة</h2>
-      <p className="hint">
-        يُنتج المحرك مصدر UFOmaker Arabic قابل للمراجعة، ثم يجمّع OTF و TTF محلياً ويفحص الجداول
-        والتشكيل قبل حفظ تقرير البناء داخل المشروع.
-      </p>
+      <PanelHeader
+        icon="pulse"
+        title="البناء والمعاينة"
+        subtitle="UFOmaker Arabic ← OTF/TTF ← فحص الجداول والتشكيل"
+        actions={<StatusChip tone="info" icon="shield">محلي</StatusChip>}
+      />
 
-      <h3>إعدادات التشكيل</h3>
+      <div className="panel-body build-layout">
+        <div className="build-controls">
+          <SectionLabel icon="sliders">إعدادات التشكيل</SectionLabel>
       <div className="toggle-list">
         <label>
           <input
@@ -360,9 +369,12 @@ export default function BuildPanel({ project, onProject, onNotice, onOpenSlot }:
         </div>
       ) : null}
 
-      {fontPath ? (
-        <>
-          <h3>معاينة HarfBuzz</h3>
+        </div>
+
+        <div className="build-output">
+          <SectionLabel icon="pulse">معاينة HarfBuzz</SectionLabel>
+          {fontPath ? (
+            <>
           <p className="hint">الحروف تظهر بترتيبها البصري من اليمين لليسار كما يخرجها محرك التشكيل.</p>
           <div className="button-row">
             <input
@@ -458,10 +470,15 @@ export default function BuildPanel({ project, onProject, onNotice, onOpenSlot }:
               ) : null}
             </div>
           ) : null}
-        </>
-      ) : null}
+          </>
+        ) : (
+          <div className="result-placeholder">
+            <Icon name="pulse" size={24} />
+            <p>ابنِ الخط أولاً لتظهر هنا معاينة التشكيل.</p>
+          </div>
+        )}
 
-      {project.project.builds.length > 0 ? (
+        {project.project.builds.length > 0 ? (
         <>
           <h3>سجل البناء</h3>
           <ul className="build-history">
@@ -477,6 +494,8 @@ export default function BuildPanel({ project, onProject, onNotice, onOpenSlot }:
           </ul>
         </>
       ) : null}
+        </div>
+      </div>
     </div>
   );
 }

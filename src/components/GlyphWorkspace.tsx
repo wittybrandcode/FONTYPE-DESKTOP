@@ -718,7 +718,9 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
   return (
     <div className="panel workspace-editor">
       <div className="ws-header">
+        <span className="ws-header-tag">محرر الحروف</span>
         <Icon name="target" size={17} />
+        <span className="ws-field-label">الخانة</span>
         <select
           value={selected?.slotId ?? ""}
           onChange={(event) => setSelectedId(event.target.value)}
@@ -734,6 +736,7 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
         <StatusChip tone={selected?.originalSvg ? "accent" : "neutral"} icon={selected?.originalSvg ? "check" : "info"}>
           {selected ? (FORM_LABELS[selected.form] ?? selected.form) : "لا توجد خانة"}
         </StatusChip>
+        <span className="ws-header-context" dir="ltr">{upm} UPM</span>
         <span className="ws-header-spacer" />
         <IconButton icon="undo" label="تراجع" shortcut="Ctrl+Z" disabled={past.length === 0} onClick={undo} />
         <IconButton icon="redo" label="إعادة" shortcut="Ctrl+Shift+Z" disabled={future.length === 0} onClick={redo} />
@@ -781,6 +784,12 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
             <ToolbarDivider />
             <IconButton icon="fit" label="احتواء الرسم" shortcut="0" onClick={() => setViewport(fitViewport(upm, size.w, size.h, outlineRect))} />
             <IconButton icon="square" label="احتواء الـ Em" onClick={() => setViewport(fitViewport(upm, size.w, size.h))} />
+          </div>
+
+          <div className="canvas-view-label" aria-hidden="true">
+            <span>لوحة الرسم</span>
+            <strong>{selected?.glyphName ?? "—"}</strong>
+            <small>EM {upm}</small>
           </div>
 
           <div className="ws-canvas-wrap" ref={wrapRef}>
@@ -880,7 +889,19 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
             onPointerUp={onPointerUp}
             onContextMenu={(event) => event.preventDefault()}
           >
+            <defs>
+              <pattern id="canvas-dots" width="24" height="24" patternUnits="userSpaceOnUse">
+                <circle cx="1" cy="1" r="0.8" className="canvas-dot" />
+              </pattern>
+            </defs>
             <rect className="ws-background" x={0} y={0} width={size.w} height={size.h} />
+            <rect
+              className="em-frame"
+              x={worldToScreen({ x: 0, y: upm }, viewport).x}
+              y={worldToScreen({ x: 0, y: upm }, viewport).y}
+              width={upm * viewport.zoom}
+              height={upm * viewport.zoom}
+            />
 
             {prefs.gridVisible ? (
               <g className="ws-grid">

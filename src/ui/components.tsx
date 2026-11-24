@@ -57,6 +57,40 @@ export function ToolbarDivider() {
   return <span className="toolbar-divider" aria-hidden="true" />;
 }
 
+interface PanelHeaderProps {
+  icon: IconName;
+  title: string;
+  subtitle?: string;
+  actions?: ReactNode;
+  tone?: "default" | "accent" | "warning" | "danger";
+}
+
+/** Dense docked-panel header used across every module of the studio. */
+export function PanelHeader({ icon, title, subtitle, actions, tone = "default" }: PanelHeaderProps) {
+  return (
+    <header className={`panel-header panel-header--${tone}`}>
+      <span className="panel-header-icon"><Icon name={icon} size={16} /></span>
+      <div className="panel-header-copy">
+        <h2>{title}</h2>
+        {subtitle ? <p>{subtitle}</p> : null}
+      </div>
+      {actions ? <div className="panel-header-actions">{actions}</div> : null}
+    </header>
+  );
+}
+
+export function SectionLabel({ children, icon, action }: { children: ReactNode; icon?: IconName; action?: ReactNode }) {
+  return (
+    <div className="section-label">
+      <span className="section-label-text">
+        {icon ? <Icon name={icon} size={13} /> : null}
+        {children}
+      </span>
+      {action}
+    </div>
+  );
+}
+
 export function Kbd({ children }: { children: ReactNode }) {
   return <kbd className="kbd">{children}</kbd>;
 }

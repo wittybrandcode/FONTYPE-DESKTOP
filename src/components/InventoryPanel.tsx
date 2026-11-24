@@ -9,6 +9,7 @@ import type {
   SvgInspection,
   ValidationFinding,
 } from "../core/types";
+import { PanelHeader, SectionLabel } from "../ui/components";
 
 interface Props {
   project: ProjectHandle;
@@ -325,16 +326,15 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
 
   return (
     <div className="panel inventory-panel">
-      <div className="panel-heading">
-        <div>
-          <h2>مخزون الخانات واستيراد SVG</h2>
-          <p className="hint">
-            هوية الخانة ثابتة من المشروع؛ اسم ملف SVG لا يغيّر الحرف أو أشكال الوصل.
-            يمكن سحب ملف SVG وإفلاته فوق أي خانة أو فوق منطقة المعاينة.
-          </p>
-        </div>
-        <button onClick={refreshInventory}>تحديث المخزون</button>
-      </div>
+      <PanelHeader
+        icon="grid"
+        title="مخزون الخانات واستيراد SVG"
+        subtitle="هوية الخانة من المشروع · اسم الملف لا يغيّر الحرف"
+        actions={<button onClick={refreshInventory}>تحديث المخزون</button>}
+      />
+
+      <div className="panel-body inventory-layout">
+        <div className="inventory-browser">
 
       {preset ? (
         <div className="preset-bar">
@@ -406,7 +406,10 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
         </div>
       )}
 
-      {selected ? (
+        </div>
+
+        <div className="inventory-detail-pane">
+          {selected ? (
         <div
           className={`slot-detail ${dragTargetId === selected.slotId ? "drag-target" : ""}`}
           data-slot-drop={selected.slotId}
@@ -523,7 +526,7 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
 
           {findings.length > 0 ? (
             <div className="findings-block">
-              <h3>ملاحظات الفحص</h3>
+              <SectionLabel icon="warning">ملاحظات الفحص</SectionLabel>
               <ul className="finding-list">
                 {findings.map((finding, index) => (
                   <li key={`${finding.code}-${index}`} className={finding.severity}>
@@ -535,7 +538,14 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
             </div>
           ) : null}
         </div>
-      ) : null}
+          ) : (
+            <div className="result-placeholder">
+              <strong>لا توجد خانة محددة</strong>
+              <p>اختر خانة من المخزون لعرض المعاينة وخيارات الاستيراد.</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
