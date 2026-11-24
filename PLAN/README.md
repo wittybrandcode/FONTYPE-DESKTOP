@@ -26,6 +26,7 @@ The application is a **designer-facing Arabic font authoring environment**, not 
 |---|---|
 | `PRD.md` | Product requirements, scope, workflows, and acceptance criteria |
 | `DESIGN.md` | Interface model and detailed ruler, guide, grid, snapping, and positioning behavior |
+| `UI_UX_MASTER_PLAN.md` | Phase 7 visual, component, accessibility, usability, and UX elevation plan |
 | `ARCHITECTURE.md` | Application architecture, modules, services, and technical pipeline |
 | `DATA_MODEL.md` | Project, glyph-slot, metric, anchor, and build data structures |
 | `SVG_IMPORT_SPEC.md` | SVG import contract and Illustrator authoring rules |
