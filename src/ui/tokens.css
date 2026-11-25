@@ -7,10 +7,18 @@
 :root {
   color-scheme: dark;
 
-  /* Typography */
+  /* Typography — one scale for every phase-8 surface */
   --font-ui: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
   --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
   --font-display: "Noto Naskh Arabic", "IBM Plex Sans Arabic", serif;
+  --fs-2xs: 9px;
+  --fs-xs: 10px;
+  --fs-sm: 11px;
+  --fs-md: 12px;
+  --fs-lg: 13px;
+  --fs-xl: 15px;
+  --lh-dense: 1.35;
+  --lh-body: 1.5;
 
   /* Neutral surfaces — solid, layered like a desktop tool */
   --bg-app: #1b1b1b;
@@ -20,6 +28,8 @@
   --surface-2: #2c2c2c;
   --surface-3: #353535;
   --surface-4: #3f3f3f;
+  --surface-hover: #303030;
+  --surface-active: #3a3a3a;
   --surface-glass: #252525; /* solid — no glassmorphism */
   --input-bg: #1a1a1a;
   --canvas-bg: #141414;
@@ -35,7 +45,7 @@
   --text: #f2f2f2;
   --text-2: #c8c8c8;
   --muted: #9a9a9a;
-  --text-subtle: #8f8f8f; /* ≥ 4.5:1 on #252525 */
+  --text-subtle: #969696; /* ≥ 4.5:1 on #2c2c2c */
 
   /* Functional accents */
   --accent: #4b9fff; /* focus, selection, active tab */
@@ -92,8 +102,10 @@
   --inspector-w: 292px;
   --panel-head-h: 30px;
   --control-h: 26px;
+  --resizer-w: 4px;
 
   --transition: 120ms ease-out;
+  --transition-tip: 90ms ease-out;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -112,7 +124,8 @@
 @media (forced-colors: active) {
   :focus-visible { outline: 2px solid Highlight; }
   .ui-button, .icon-btn, .panel, .dock, .menu-popup, .modal-card,
-  .command-palette, .status-chip, .accordion-badge, .kbd { border: 1px solid CanvasText; }
+  .command-palette, .status-chip, .accordion-badge, .kbd,
+  .dock-resizer, .inspector-resizer { border: 1px solid CanvasText; }
   .ruler, .ws-canvas, .inspector-head, .panel-header { border-color: CanvasText; }
   .metric-line, .workspace-guide, .workspace-artwork, .anchor-marker circle,
   .anchor-connection, .em-frame { forced-color-adjust: none; }

@@ -42,6 +42,8 @@ export default function GlyphDock({ slots, selectedId, onSelect }: Props) {
     () => Array.from(new Set(slots.map((slot) => slot.group))).sort((a, b) => a.localeCompare(b, "ar")),
     [slots],
   );
+  const readyCount = useMemo(() => slots.filter((slot) => slot.status === "ready").length, [slots]);
+  const hasFilters = query.trim().length > 0 || group !== "all";
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -96,10 +98,24 @@ export default function GlyphDock({ slots, selectedId, onSelect }: Props) {
         </select>
       </div>
 
+      <div className="glyph-dock-summary" aria-label="ملخص الخانات">
+        <span>معروض <strong>{filtered.length}/{slots.length}</strong></span>
+        <span className="summary-grow" />
+        <span>جاهزة <strong>{readyCount}</strong></span>
+      </div>
+
       {filtered.length === 0 ? (
         <div className="glyph-dock-empty">
-          <Icon name="search" size={18} />
-          <p>لا توجد خانات مطابقة.</p>
+          <Icon name={hasFilters ? "search" : "grid"} size={18} />
+          <p>{hasFilters ? "لا توجد خانات مطابقة." : "لا توجد خانات في هذا المشروع."}</p>
+          {hasFilters ? (
+            <button
+              type="button"
+              onClick={() => { setQuery(""); setGroup("all"); setActive(0); }}
+            >
+              إزالة الفلاتر
+            </button>
+          ) : null}
         </div>
       ) : (
         <div className="glyph-dock-list" role="listbox" aria-label="خانات الخط">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, buildFontSource, runEngineJob } from "./core/api";
@@ -15,7 +15,7 @@ import MenuBar, { type MenuGroup } from "./ui/MenuBar";
 import ProjectDialog from "./ui/ProjectDialog";
 import ShortcutsDialog from "./ui/ShortcutsDialog";
 import { Icon, type IconName } from "./ui/icons";
-import { EmptyState, IconButton, SegmentedControl, StatusChip, ToolbarDivider } from "./ui/components";
+import { DockResizer, EmptyState, IconButton, SegmentedControl, StatusChip, ToolbarDivider } from "./ui/components";
 
 type Tab = "workspace" | "inventory" | "build" | "engine";
 type NoticeKind = "ok" | "error";
@@ -45,6 +45,7 @@ export default function App() {
   const [dockView, setDockView] = useState<"glyphs" | "project" | "engine">("glyphs");
   const [focusSlotId, setFocusSlotId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(272);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -319,7 +320,10 @@ export default function App() {
       </div>
       </div>
 
-      <main className={`workspace-shell ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
+      <main
+        className={`workspace-shell ${sidebarOpen ? "" : "sidebar-collapsed"}`}
+        style={{ "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
+      >
         <aside className="dock dock--left" aria-label="لوحة المستند">
           <div className="dock-titlebar">
             <span>دوكس المستند</span>
@@ -363,6 +367,14 @@ export default function App() {
             )}
           </div>
         </aside>
+        <DockResizer
+          label="تغيير عرض لوحة المستند"
+          value={sidebarWidth}
+          min={220}
+          max={420}
+          onChange={setSidebarWidth}
+          reverse
+        />
 
         <section className="view-surface" aria-label={activeTab.label}>
           {tab === "workspace" ? (
@@ -380,7 +392,13 @@ export default function App() {
                 <EmptyState
                   icon="cursor"
                   title="لا يوجد مستند مفتوح"
-                  description="أنشئ مشروعاً لتبدأ المخزون، ثم اختر خانة واستورد SVG لعرضها على مساحة العمل مع المساطر وخطوط القياس والمراسي."
+                  description="ثلاث خطوات تفصلك عن أول خط عربي قابل للبناء."
+                  steps={[
+                    "أنشئ مشروعاً محلياً بصيغة .afsp أو افتح مشروعاً موجوداً.",
+                    "استورد SVG لكل شكل من أشكال الحرف في خانته المخصصة.",
+                    "اضبط المساطر والمراسي، ثم راجع التحقق قبل بناء الخط.",
+                  ]}
+                  note={<><Icon name="shield" size={13} /><span>لا تُرسل الرسومات أو بيانات المشروع إلى أي خدمة شبكية.</span></>}
                   action={
                     <>
                       <button type="button" className="primary" onClick={() => setNewProjectOpen(true)}>مشروع جديد</button>
@@ -398,7 +416,11 @@ export default function App() {
                 <EmptyState
                   icon="grid"
                   title="لا توجد خانات"
-                  description="أنشئ مشروعاً جديداً أو افتح مشروعاً بصيغة .afsp لتوليد مخزون الخانات واستيراد رسومات SVG لكل خانة على حدة."
+                  description="مخزون الخانات يُنشأ مع المشروع، وتبقى هوية كل خانة مرتبطة بالمشروع لا باسم ملف SVG."
+                  steps={[
+                    "أنشئ مشروعاً جديداً أو افتح مشروعاً بصيغة .afsp.",
+                    "راجع قائمة الأشكال المطلوبة لكل حرف.",
+                  ]}
                   action={<button type="button" className="primary" onClick={() => setNewProjectOpen(true)}>مشروع جديد</button>}
                 />
               </div>
@@ -421,7 +443,7 @@ export default function App() {
 
       <div className="toast-stack" role="region" aria-label="الإشعارات">
         {toasts.map((toast) => (
-          <div key={toast.id} className={`toast ${toast.kind}`} role="status">
+          <div key={toast.id} className={`toast ${toast.kind}`} role={toast.kind === "error" ? "alert" : "status"}>
             <Icon name={toast.kind === "ok" ? "checkCircle" : "warning"} size={15} />
             <span>{toast.text}</span>
           </div>
@@ -438,6 +460,13 @@ export default function App() {
         <span className="status-item status-optional">معتمدة: <strong>{ready}</strong></span>
         <span className="status-item status-optional">للمراجعة: <strong>{review}</strong></span>
         <span className="status-item status-optional">مستوردة: <strong>{imported}</strong></span>
+        <span className="status-item status-progress" aria-label={`الخانات المعتمدة ${ready} من ${slots.length}`}>
+          <span>جاهزية</span>
+          <span className="status-progress-track" aria-hidden="true">
+            <span className="status-progress-fill" style={{ width: `${slots.length ? (ready / slots.length) * 100 : 0}%` }} />
+          </span>
+          <strong>{ready}/{slots.length}</strong>
+        </span>
         <span className="status-grow" />
         <span className="status-item">{activeTab.label}</span>
         <button type="button" className="status-command" onClick={() => setCommandOpen(true)}>

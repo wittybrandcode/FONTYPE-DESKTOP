@@ -11,8 +11,9 @@ import {
 import type { Anchor, AnchorSpec, GlyphSlot, GlobalMetrics, Guide, Project, ProjectHandle } from "../core/types";
 import { Icon } from "../ui/icons";
 import {
+  DockResizer,
   IconButton,
-  StatusChip,
+  StatusBadge,
   ToolbarDivider,
 } from "../ui/components";
 import { Inspector, InspectorSection } from "../ui/Inspector";
@@ -81,6 +82,21 @@ const FORM_LABELS: Record<string, string> = {
   medial: "وسيط",
   final: "نهائي",
 };
+
+const SLOT_STATUS_LABELS: Record<string, string> = {
+  empty: "فارغة",
+  imported: "مُستوردة",
+  ready: "معتمدة",
+  "needs-review": "تحتاج مراجعة",
+  error: "خطأ",
+};
+
+function slotStatusTone(status?: string): "ready" | "imported" | "review" | "error" | "empty" | "idle" {
+  if (status === "ready" || status === "imported" || status === "error") return status;
+  if (status === "needs-review") return "review";
+  if (status === "empty") return "empty";
+  return "idle";
+}
 
 function metricValue(metrics: GlobalMetrics, key: string): number | null {
   switch (key) {
@@ -152,6 +168,7 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
   const [future, setFuture] = useState<Project[]>([]);
   const [anchorSuggestions, setAnchorSuggestions] = useState<AnchorSpec[]>([]);
   const [sourceBusy, setSourceBusy] = useState(false);
+  const [inspectorWidth, setInspectorWidth] = useState(292);
 
   const spacePanRef = useRef(false);
   const spacePrevToolRef = useRef<Tool>("select");
@@ -750,10 +767,14 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
   );
 
   return (
-    <div className="panel workspace-editor">
+    <div className="panel workspace-editor" style={{ "--inspector-w": `${inspectorWidth}px` } as CSSProperties}>
       <div className="ws-header">
         <span className="ws-header-tag">محرر الحروف</span>
-        <Icon name="target" size={17} />
+        <span className="ws-breadcrumb" aria-label="مسار الخانة">
+          <strong>{project.project.font.familyName}</strong>
+          <Icon name="chevronLeft" size={12} />
+          <span>{selected ? `${selected.characterName} — ${FORM_LABELS[selected.form] ?? selected.form}` : "لا توجد خانة"}</span>
+        </span>
         <span className="ws-field-label">الخانة</span>
         <select
           value={selected?.slotId ?? ""}
@@ -767,9 +788,9 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
             </option>
           ))}
         </select>
-        <StatusChip tone={selected?.originalSvg ? "accent" : "neutral"} icon={selected?.originalSvg ? "check" : "info"}>
-          {selected ? (FORM_LABELS[selected.form] ?? selected.form) : "لا توجد خانة"}
-        </StatusChip>
+        <StatusBadge tone={slotStatusTone(selected?.status)}>
+          {selected ? SLOT_STATUS_LABELS[selected.status] ?? "غير محددة" : "لا توجد خانة"}
+        </StatusBadge>
         <span className="ws-header-context" dir="ltr">{upm} UPM</span>
         <span className="ws-header-spacer" />
         <IconButton icon="undo" label="تراجع" shortcut="Ctrl+Z" disabled={past.length === 0} onClick={undo} />
@@ -788,9 +809,11 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
 
       <div className="ws-stage">
         <div className="ws-tool-rail" role="toolbar" aria-label="أدوات مساحة العمل">
+          <span className="ws-rail-section" aria-hidden="true">تحرير</span>
           <IconButton icon="cursor" label="أداة التحديد" shortcut="V" active={tool === "select"} onClick={() => setTool("select")} />
           <IconButton icon="hand" label="أداة التحريك" shortcut="H" active={tool === "pan"} onClick={() => setTool("pan")} />
           <ToolbarDivider />
+          <span className="ws-rail-section" aria-hidden="true">عرض</span>
           <IconButton icon="anchor" label="إظهار المراسي" shortcut="A" active={anchorsVisible} onClick={() => setAnchorsVisible((value) => !value)} />
           <IconButton icon="guide" label="إظهار الأدلة" shortcut="G" active={guidesVisible} onClick={() => setGuidesVisible((value) => !value)} />
           <IconButton icon="ruler" label="المساطر" shortcut="R" active={prefs.rulersVisible} onClick={() => updatePrefs({ rulersVisible: !prefs.rulersVisible })} />
@@ -1113,9 +1136,22 @@ export default function GlyphWorkspace({ project, onProject, onNotice, initialSl
             <ToolbarDivider />
             <span>حفظ آمن</span>
             <span style={{ flex: 1 }} />
-            <span>{selected ? `${selected.characterName} — ${FORM_LABELS[selected.form] ?? selected.form} · ${selected.anchors.length} مرساة` : "لا يوجد رسم"}</span>
+            <span className="ws-status-slot">{selected ? `${selected.characterName} — ${FORM_LABELS[selected.form] ?? selected.form} · ${selected.anchors.length} مرساة` : "لا يوجد رسم"}</span>
+            <StatusBadge tone={slotStatusTone(selected?.status)}>
+              {selected ? SLOT_STATUS_LABELS[selected.status] ?? "غير محددة" : "فارغ"}
+            </StatusBadge>
           </div>
         </div>
+
+        <DockResizer
+          className="inspector-resizer"
+          label="تغيير عرض المفتش"
+          value={inspectorWidth}
+          min={240}
+          max={420}
+          onChange={setInspectorWidth}
+          reverse
+        />
 
         <Inspector subtitle={selected ? selected.glyphName : "لا توجد خانة"}>
           <InspectorSection

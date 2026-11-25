@@ -1,5 +1,17 @@
-import { useEffect, useId, useRef, type ButtonHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  type ButtonHTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { Icon, type IconName } from "./icons";
+
+function ariaShortcut(shortcut: string): string {
+  return shortcut.replace(/^Ctrl/, "Control").replace(/\s+/g, "");
+}
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon: IconName;
@@ -31,6 +43,7 @@ export function IconButton({
       className={`icon-btn icon-btn--${variant} icon-btn--${tone} ${active ? "is-active" : ""} has-tip ${className}`.trim()}
       data-tip={tip}
       aria-label={label}
+      aria-keyshortcuts={shortcut ? ariaShortcut(shortcut) : undefined}
       aria-pressed={active}
     >
       <Icon name={icon} size={size} weight={active ? "fill" : "regular"} />
@@ -55,6 +68,82 @@ export function Button({ icon, children, variant = "secondary", className = "", 
 
 export function ToolbarDivider() {
   return <span className="toolbar-divider" aria-hidden="true" />;
+}
+
+interface DockResizerProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+  /** RTL: a start-side dock grows when the pointer moves left. */
+  reverse?: boolean;
+  className?: string;
+}
+
+/** Mouse/touch/keyboard resize handle for a docked panel. */
+export function DockResizer({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+  reverse = false,
+  className = "dock-resizer",
+}: DockResizerProps) {
+  const origin = useRef<{ x: number; value: number } | null>(null);
+  const clamp = (next: number) => Math.min(max, Math.max(min, Math.round(next)));
+
+  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    origin.current = { x: event.clientX, value };
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!origin.current) return;
+    const delta = (event.clientX - origin.current.x) * (reverse ? -1 : 1);
+    onChange(clamp(origin.current.value + delta));
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    origin.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const increase = reverse ? "ArrowLeft" : "ArrowRight";
+    const decrease = reverse ? "ArrowRight" : "ArrowLeft";
+    let next: number | null = null;
+    if (event.key === increase) next = value + 16;
+    else if (event.key === decrease) next = value - 16;
+    else if (event.key === "Home") next = min;
+    else if (event.key === "End") next = max;
+    if (next === null) return;
+    event.preventDefault();
+    onChange(clamp(next));
+  }
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={Math.round(value)}
+      aria-valuetext={`${Math.round(value)} بكسل`}
+      className={className}
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onKeyDown={onKeyDown}
+    />
+  );
 }
 
 interface PanelHeaderProps {
@@ -154,15 +243,25 @@ interface EmptyStateProps {
   icon: IconName;
   title: string;
   description?: string;
+  steps?: string[];
+  note?: ReactNode;
   action?: ReactNode;
 }
 
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, steps, note, action }: EmptyStateProps) {
   return (
     <div className="empty-state">
       <span className="empty-state-icon"><Icon name={icon} size={26} /></span>
       <h2>{title}</h2>
       {description ? <p className="hint">{description}</p> : null}
+      {steps && steps.length > 0 ? (
+        <ol className="empty-steps">
+          {steps.map((step, index) => (
+            <li key={step}><b aria-hidden="true">{index + 1}</b><span>{step}</span></li>
+          ))}
+        </ol>
+      ) : null}
+      {note ? <div className="empty-note">{note}</div> : null}
       {action ? <div className="button-row">{action}</div> : null}
     </div>
   );
