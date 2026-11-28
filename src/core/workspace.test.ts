@@ -1,13 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
+  alignPlacedRects,
   collectSnapTargets,
+  distributePlacedRects,
   findSnap,
   fitViewport,
+  flipPlacement,
   majorStepFor,
+  movePlacement,
+  rectFromPoints,
+  rectsIntersect,
+  rotatePlacementAround,
   rulerTicks,
+  scalePlacementAxisAround,
+  scalePlacementAround,
   screenToWorld,
+  selectionBounds,
+  stepZoom,
+  transformRect,
+  unionRect,
   worldToScreen,
   zoomAt,
+  type Placement,
+  type PlacedRect,
   type SnapTarget,
 } from "./workspace";
 
@@ -190,4 +205,117 @@ describe("snap target registry", () => {
     expect(gridX.every((item) => item.value >= -100 && item.value <= 700)).toBe(true);
     expect(targets.find((item) => item.id === "advance:end")?.value).toBe(600);
   });
+
+  it("aligns transformed edges, not axis-aligned assumptions", () => {
+    const targets = collectSnapTargets({
+      ...input,
+      bounds: [0, 0, 200, 100],
+      placement: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 90 },
+      leftSideBearing: 40,
+      rightSideBearing: 40,
+      guides: [{
+        guideId: "v", orientation: "vertical", positionFU: 300,
+        locked: false, visible: true, scope: "project",
+      }],
+    });
+    // A 90° turn puts the artwork's left edge 100 FU left of its origin.
+    expect(targets.find((item) => item.id === "guide:v:left")?.value).toBeCloseTo(400);
+    expect(targets.find((item) => item.id === "outline:xMin")?.value).toBeCloseTo(100);
+    expect(targets.find((item) => item.id === "outline:xMin")?.lineValue).toBe(0);
+  });
+
+  it("treats side bearings as edge lines and keeps cue coordinates", () => {
+    const targets = collectSnapTargets(input);
+    expect(targets.find((item) => item.id === "advance:lsb")?.value).toBe(-60);
+    expect(targets.find((item) => item.id === "advance:lsb")?.lineValue).toBe(40);
+    expect(targets.find((item) => item.id === "grid:x:0")?.lineValue).toBe(0);
+  });
 });
+
+describe("selection geometry", () => {
+  const identity: Placement = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 };
+  const bounds = { xMin: 100, yMin: 0, xMax: 300, yMax: 400 };
+
+  it("steps through the advertised discrete zoom levels", () => {
+    expect(stepZoom(0.73, 1)).toBe(1);
+    expect(stepZoom(0.73, -1)).toBe(0.5);
+    expect(stepZoom(4, 1)).toBe(4);
+    expect(stepZoom(0.02, -1)).toBe(0.25);
+  });
+
+  it("builds a marquee rectangle from any two screen corners", () => {
+    expect(rectFromPoints({ x: 9, y: 3 }, { x: 2, y: 8 })).toEqual({ xMin: 2, yMin: 3, xMax: 9, yMax: 8 });
+    expect(rectsIntersect({ xMin: 0, yMin: 0, xMax: 1, yMax: 1 }, { xMin: 2, yMin: 0, xMax: 3, yMax: 1 })).toBe(false);
+  });
+
+  it("unions placed artwork bounds after scale and rotation", () => {
+    expect(transformRect(bounds, { ...identity, x: 20, y: 10 })).toEqual({ xMin: 120, yMin: 10, xMax: 320, yMax: 410 });
+    const rect = transformRect(bounds, { ...identity, rotation: 90 });
+    expect(rect.xMin).toBeCloseTo(-400, 6);
+    expect(rect.xMax).toBeCloseTo(0, 6);
+    const union = unionRect([rect, { xMin: 500, yMin: 500, xMax: 600, yMax: 600 }]);
+    expect(union?.xMin).toBeCloseTo(-400, 6);
+    expect(union?.xMax).toBe(600);
+  });
+
+  it("scales and rotates a placement around a world pivot without drifting", () => {
+    const scaled = scalePlacementAround({ ...identity, x: 100, y: 100 }, { x: 0, y: 0 }, 2);
+    expect(scaled.x).toBe(200);
+    expect(scaled.scaleX).toBe(2);
+    expect(transformPointForTest({ x: 10, y: 10 }, scaled).x).toBeCloseTo(220, 6);
+
+    const axisScaled = scalePlacementAxisAround({ ...identity, x: 100, y: 100 }, { x: 0, y: 0 }, "x", 3);
+    expect(axisScaled.x).toBe(300);
+    expect(axisScaled.y).toBe(100);
+    expect(axisScaled.scaleX).toBe(3);
+    expect(axisScaled.scaleY).toBe(1);
+
+    const rotated = rotatePlacementAround({ ...identity, x: 100, y: 0, rotation: 10 }, { x: 0, y: 0 }, 90);
+    expect(rotated.x).toBeCloseTo(0, 6);
+    expect(rotated.y).toBeCloseTo(100, 6);
+    expect(rotated.rotation).toBe(100);
+  });
+
+  it("mirrors the artwork exactly, including its rotation direction", () => {
+    const rotated: Placement = { x: 100, y: 40, scaleX: 1.2, scaleY: 0.8, rotation: 30 };
+    const flipped = flipPlacement(rotated, "x", { x: 200, y: 40 });
+    expect(flipped.scaleX).toBeCloseTo(-1.2, 6);
+    expect(flipped.rotation).toBe(-30);
+    expect(flipped.x).toBe(300);
+    const source = { x: 20, y: 30 };
+    const original = transformPointForTest(source, rotated);
+    const mirrored = transformPointForTest(source, flipped);
+    expect(mirrored.x).toBeCloseTo(400 - original.x, 6);
+    expect(mirrored.y).toBeCloseTo(original.y, 6);
+  });
+
+  it("aligns and distributes placed rectangles deterministically", () => {
+    const items: PlacedRect[] = [
+      { id: "a", bounds, placement: { ...identity, x: 0 } },
+      { id: "b", bounds, placement: { ...identity, x: 100 } },
+      { id: "c", bounds, placement: { ...identity, x: 400 } },
+    ];
+    const aligned = alignPlacedRects(items, "left", { xMin: 50, yMin: 0, xMax: 250, yMax: 400 });
+    expect(aligned.map((item) => item.placement.x)).toEqual([-50, -50, -50]);
+
+    const distributed = distributePlacedRects(items, "x");
+    expect(distributed.map((item) => item.placement.x)).toEqual([0, 200, 400]);
+    expect(distributePlacedRects(items.slice(0, 2), "x").map((item) => item.placement.x)).toEqual([0, 100]);
+    expect(selectionBounds(items)?.xMin).toBe(100);
+  });
+
+  it("moves every placement by the same font-unit delta", () => {
+    expect(movePlacement({ ...identity, x: 40, y: -20 }, 10, -5)).toEqual({ ...identity, x: 50, y: -25 });
+  });
+});
+
+function transformPointForTest(point: { x: number; y: number }, placement: Placement) {
+  // Local projection of the engine's placement matrix: scale, then rotate, then translate.
+  const radians = (placement.rotation * Math.PI) / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  return {
+    x: placement.x + placement.scaleX * point.x * cosine - placement.scaleY * point.y * sine,
+    y: placement.y + placement.scaleX * point.x * sine + placement.scaleY * point.y * cosine,
+  };
+}

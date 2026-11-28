@@ -4,6 +4,7 @@ import type { GlyphSlot } from "../core/types";
 import {
   AccordionSection,
   IconButton,
+  InfoTip,
   NumericField,
   PanelHeader,
   SegmentedControl,
@@ -50,6 +51,13 @@ describe("shared UI components", () => {
     expect(html).toContain('data-tip="تكبير (+)"');
     expect(html).toContain("is-active");
     expect(html).toContain('aria-pressed="true"');
+  });
+
+  it("keeps non-critical guidance in an accessible tooltip", () => {
+    const html = renderToStaticMarkup(<InfoTip tip="إرشاد مساعد" />);
+    expect(html).toContain('data-tip="إرشاد مساعد"');
+    expect(html).toContain('aria-label="إرشاد مساعد"');
+    expect(html).toContain("info-tip");
   });
 
   it("renders accordion content only when expanded", () => {

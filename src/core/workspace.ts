@@ -1,4 +1,6 @@
-/** Pure font-unit workspace math: viewport transforms, rulers and snapping. */
+/** Pure font-unit workspace math: viewport transforms, rulers, selection and snapping. */
+
+import { rulerScaleFor, rulerTicksFor } from "./rulers";
 
 export interface Point {
   x: number;
@@ -69,15 +71,9 @@ export function fitViewport(
   };
 }
 
-/** Chooses a 1/2/5-style major step so labels stay roughly `targetPx` apart. */
+/** Kept for callers of the original math API; the canonical engine is `rulers.ts`. */
 export function majorStepFor(zoom: number, targetPx = 72): number {
-  const desired = targetPx / Math.max(zoom, 1e-6);
-  const magnitude = 10 ** Math.floor(Math.log10(Math.max(desired, 1e-6)));
-  for (const factor of [1, 2, 5, 10]) {
-    const step = factor * magnitude;
-    if (step >= desired) return step;
-  }
-  return 10 * magnitude;
+  return rulerScaleFor(zoom, targetPx).major;
 }
 
 export interface Tick {
@@ -87,17 +83,7 @@ export interface Tick {
 }
 
 export function rulerTicks(min: number, max: number, major: number, divisions: number): Tick[] {
-  const minor = major / Math.max(1, divisions);
-  const first = Math.ceil(min / minor - 1e-9);
-  const last = Math.floor(max / minor + 1e-9);
-  const ticks: Tick[] = [];
-  for (let index = first; index <= last; index += 1) {
-    const value = index * minor;
-    const isMajor = Math.abs(value / major - Math.round(value / major)) < 1e-6;
-    const rounded = Math.abs(value - Math.round(value)) < 1e-6 ? String(Math.round(value)) : value.toFixed(2);
-    ticks.push({ value, major: isMajor, label: isMajor ? rounded : "" });
-  }
-  return ticks;
+  return rulerTicksFor(min, max, { major, minor: major / Math.max(1, divisions), divisions });
 }
 
 export type SnapKind = "anchor" | "metricLine" | "guide" | "outline" | "advance" | "grid";
@@ -198,6 +184,11 @@ export interface TargetInput {
   bounds: [number, number, number, number] | null;
   scaleX: number;
   scaleY: number;
+  /**
+   * Full placement when available. Rotation changes which origin aligns an
+   * edge to a line; omitting it keeps the legacy scale-only behaviour.
+   */
+  placement?: Placement;
   metricValues: Record<string, number | null | undefined>;
   metricLocks: Record<string, boolean>;
   guides: Array<{ guideId: string; orientation: string; positionFU: number; locked: boolean; scope: string; visible: boolean; name?: string }>;
@@ -207,10 +198,37 @@ export interface TargetInput {
   divisions: number;
 }
 
+/** Ruler ticks expressed as snap targets, limited to the visible range. */
+export function gridSnapTargets(majorStep: number, divisions: number, range: Rect): SnapTarget[] {
+  const targets: SnapTarget[] = [];
+  const minor = majorStep / Math.max(1, divisions);
+  if (!Number.isFinite(minor) || minor <= 0) return targets;
+  for (const axis of ["x", "y"] as const) {
+    const min = axis === "x" ? range.xMin : range.yMin;
+    const max = axis === "x" ? range.xMax : range.yMax;
+    const first = Math.ceil(min / minor - 1e-9);
+    const last = Math.floor(max / minor + 1e-9);
+    for (let index = first; index <= last; index += 1) {
+      const value = Number((index * minor).toFixed(6));
+      targets.push({
+        id: `grid:${axis}:${index}`, kind: "grid", priority: 6, axis,
+        value, lineValue: value, label: "الشبكة",
+      });
+    }
+  }
+  return targets;
+}
+
 /** Builds snap candidates expressed as desired origin coordinates. */
 export function collectSnapTargets(input: TargetInput): SnapTarget[] {
   const targets: SnapTarget[] = [];
   const [bxMin, byMin, bxMax, byMax] = input.bounds ?? [0, 0, 0, 0];
+  const placement: Placement = input.placement ?? {
+    x: 0, y: 0, scaleX: input.scaleX, scaleY: input.scaleY, rotation: 0,
+  };
+  const placed = input.bounds
+    ? transformRect({ xMin: bxMin, yMin: byMin, xMax: bxMax, yMax: byMax }, placement)
+    : null;
   const push = (
     id: string,
     kind: SnapKind,
@@ -221,72 +239,271 @@ export function collectSnapTargets(input: TargetInput): SnapTarget[] {
     lineValue?: number,
   ) => targets.push({ id, kind, priority, axis, value, lineValue, label });
 
+  /** Origin coordinate that puts the requested transformed edge on `line`. */
+  const originFor = (axis: "x" | "y", edge: "min" | "max", line: number): number => {
+    if (!placed) {
+      const offset = axis === "x"
+        ? (edge === "min" ? bxMin : bxMax) * input.scaleX
+        : (edge === "min" ? byMin : byMax) * input.scaleY;
+      return line - offset;
+    }
+    const key = axis === "x"
+      ? (edge === "min" ? "xMin" : "xMax")
+      : (edge === "min" ? "yMin" : "yMax");
+    return placement[axis] + line - placed[key];
+  };
+
   // 1. Anchors (filled in Phase 3); reserved priority above all others.
   // 2. Baseline and metric lines. Artwork bottom/top align to the line.
   for (const [key, raw] of Object.entries(input.metricValues)) {
-    if (raw === null || raw === undefined) continue;
+    if (raw === null || raw === undefined || !Number.isFinite(raw)) continue;
     const locked = input.metricLocks[key] === true;
     const priority = locked ? 2 : 4;
-    push(`metric:${key}:bottom`, "metricLine", priority, "y", raw - byMin * input.scaleY, `${key} ← قاع`, raw);
-    push(`metric:${key}:top`, "metricLine", priority, "y", raw - byMax * input.scaleY, `${key} ← قمة`, raw);
-    if (key === "baseline") push("origin:y", "outline", 4, "y", 0, "الأصل");
+    push(`metric:${key}:bottom`, "metricLine", priority, "y", originFor("y", "min", raw), `${key} ← قاع`, raw);
+    push(`metric:${key}:top`, "metricLine", priority, "y", originFor("y", "max", raw), `${key} ← قمة`, raw);
+    if (key === "baseline") push("origin:y", "outline", 4, "y", 0, "الأصل", 0);
   }
 
   // 3. Custom guides — project-wide plus guides scoped to this slot.
   for (const guide of input.guides) {
     if (!guide.visible || (guide.scope !== "project" && guide.scope !== input.scope)) continue;
+    if (!Number.isFinite(guide.positionFU)) continue;
     const priority = guide.locked ? 3 : 4;
     const label = guide.name || guide.guideId;
     if (guide.orientation === "vertical") {
       push(`guide:${guide.guideId}:origin`, "guide", priority, "x", guide.positionFU, label, guide.positionFU);
       push(
         `guide:${guide.guideId}:left`, "guide", priority, "x",
-        guide.positionFU - bxMin * input.scaleX, `${label} ← يسار`, guide.positionFU,
+        originFor("x", "min", guide.positionFU), `${label} ← يسار`, guide.positionFU,
       );
       push(
         `guide:${guide.guideId}:right`, "guide", priority, "x",
-        guide.positionFU - bxMax * input.scaleX, `${label} ← يمين`, guide.positionFU,
+        originFor("x", "max", guide.positionFU), `${label} ← يمين`, guide.positionFU,
       );
     } else {
       push(`guide:${guide.guideId}:origin`, "guide", priority, "y", guide.positionFU, label, guide.positionFU);
       push(
         `guide:${guide.guideId}:bottom`, "guide", priority, "y",
-        guide.positionFU - byMin * input.scaleY, `${label} ← قاع`, guide.positionFU,
+        originFor("y", "min", guide.positionFU), `${label} ← قاع`, guide.positionFU,
       );
       push(
         `guide:${guide.guideId}:top`, "guide", priority, "y",
-        guide.positionFU - byMax * input.scaleY, `${label} ← قمة`, guide.positionFU,
+        originFor("y", "max", guide.positionFU), `${label} ← قمة`, guide.positionFU,
       );
     }
   }
 
   // 4. Outline bounds and extrema relative to the current origin.
-  push("outline:xMin", "outline", 4, "x", -bxMin * input.scaleX, "حدود الرسم ← يسار");
-  push("outline:xMax", "outline", 4, "x", -bxMax * input.scaleX, "حدود الرسم ← يمين");
-  push("outline:yMin", "outline", 4, "y", -byMin * input.scaleY, "حدود الرسم ← قاع");
-  push("outline:yMax", "outline", 4, "y", -byMax * input.scaleY, "حدود الرسم ← قمة");
+  push("outline:xMin", "outline", 4, "x", originFor("x", "min", 0), "حدود الرسم ← يسار", 0);
+  push("outline:xMax", "outline", 4, "x", originFor("x", "max", 0), "حدود الرسم ← يمين", 0);
+  push("outline:yMin", "outline", 4, "y", originFor("y", "min", 0), "حدود الرسم ← قاع", 0);
+  push("outline:yMax", "outline", 4, "y", originFor("y", "max", 0), "حدود الرسم ← قمة", 0);
 
-  // 5. Advance and side-bearing boundaries.
-  push("advance:origin", "advance", 5, "x", 0, "أصل الخانة");
-  push("advance:end", "advance", 5, "x", input.advanceWidth, "نهاية التقدّم");
-  push("advance:lsb", "advance", 5, "x", input.leftSideBearing, "الحافة اليسرى");
-  push(
-    "advance:rsb", "advance", 5, "x",
-    input.advanceWidth - input.rightSideBearing, "الحافة اليمنى",
-  );
+  // 5. Advance and side-bearing boundaries; edge targets use the transformed box.
+  const rsb = input.advanceWidth - input.rightSideBearing;
+  push("advance:origin", "advance", 5, "x", 0, "أصل الخانة", 0);
+  push("advance:end", "advance", 5, "x", input.advanceWidth, "نهاية التقدّم", input.advanceWidth);
+  push("advance:lsb", "advance", 5, "x", originFor("x", "min", input.leftSideBearing), "الحافة اليسرى", input.leftSideBearing);
+  push("advance:rsb", "advance", 5, "x", originFor("x", "max", rsb), "الحافة اليمنى", rsb);
 
   // 6. Grid intersections are visible-range limited to avoid huge arrays.
-  const minor = input.majorStep / Math.max(1, input.divisions);
-  const xStart = Math.ceil(input.visibleRange.xMin / minor);
-  const xEnd = Math.floor(input.visibleRange.xMax / minor);
-  for (let index = xStart; index <= xEnd; index += 1) {
-    push(`grid:x:${index}`, "grid", 6, "x", index * minor, "الشبكة");
-  }
-  const yStart = Math.ceil(input.visibleRange.yMin / minor);
-  const yEnd = Math.floor(input.visibleRange.yMax / minor);
-  for (let index = yStart; index <= yEnd; index += 1) {
-    push(`grid:y:${index}`, "grid", 6, "y", index * minor, "الشبكة");
-  }
-
+  targets.push(...gridSnapTargets(input.majorStep, input.divisions, input.visibleRange));
   return targets;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Phase 9 M1/M2 — selection geometry and placement transforms               */
+/* -------------------------------------------------------------------------- */
+
+/** Shape of `GlyphSlot["placement"]`, kept structural so this module stays pure. */
+export interface Placement {
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+}
+
+export interface PlacedRect {
+  id: string;
+  bounds: Rect;
+  placement: Placement;
+}
+
+/** Discrete steps offered by the canvas zoom buttons and keyboard. */
+export const ZOOM_STEPS = [0.25, 0.5, 1, 2, 4] as const;
+
+/** Next/previous discrete zoom above or below the current fractional zoom. */
+export function stepZoom(zoom: number, direction: 1 | -1): number {
+  if (direction > 0) return ZOOM_STEPS.find((step) => step > zoom + 1e-6) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1];
+  const below = [...ZOOM_STEPS].reverse().find((step) => step < zoom - 1e-6);
+  return below ?? ZOOM_STEPS[0];
+}
+
+export function rectFromPoints(a: Point, b: Point): Rect {
+  return {
+    xMin: Math.min(a.x, b.x),
+    yMin: Math.min(a.y, b.y),
+    xMax: Math.max(a.x, b.x),
+    yMax: Math.max(a.y, b.y),
+  };
+}
+
+export function rectsIntersect(a: Rect, b: Rect): boolean {
+  return !(a.xMax < b.xMin || b.xMax < a.xMin || a.yMax < b.yMin || b.yMax < a.yMin);
+}
+
+export function unionRect(rects: Rect[]): Rect | null {
+  if (rects.length === 0) return null;
+  return rects.reduce(
+    (acc, rect) => ({
+      xMin: Math.min(acc.xMin, rect.xMin),
+      yMin: Math.min(acc.yMin, rect.yMin),
+      xMax: Math.max(acc.xMax, rect.xMax),
+      yMax: Math.max(acc.yMax, rect.yMax),
+    }),
+    { ...rects[0] },
+  );
+}
+
+/** Maps an artwork point in font units through a slot placement into world units. */
+export function transformPoint(point: Point, placement: Placement): Point {
+  const radians = (placement.rotation * Math.PI) / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  return {
+    x: placement.x + placement.scaleX * point.x * cosine - placement.scaleY * point.y * sine,
+    y: placement.y + placement.scaleX * point.x * sine + placement.scaleY * point.y * cosine,
+  };
+}
+
+/** Axis-aligned world bounds of a placed artwork rectangle. */
+export function transformRect(bounds: Rect, placement: Placement): Rect {
+  const corners = [
+    transformPoint({ x: bounds.xMin, y: bounds.yMin }, placement),
+    transformPoint({ x: bounds.xMin, y: bounds.yMax }, placement),
+    transformPoint({ x: bounds.xMax, y: bounds.yMin }, placement),
+    transformPoint({ x: bounds.xMax, y: bounds.yMax }, placement),
+  ];
+  return {
+    xMin: Math.min(...corners.map((point) => point.x)),
+    yMin: Math.min(...corners.map((point) => point.y)),
+    xMax: Math.max(...corners.map((point) => point.x)),
+    yMax: Math.max(...corners.map((point) => point.y)),
+  };
+}
+
+/** Bounding box of the whole selection in world (font) coordinates. */
+export function selectionBounds(items: PlacedRect[]): Rect | null {
+  return unionRect(items.map((item) => transformRect(item.bounds, item.placement)));
+}
+
+export function movePlacement(placement: Placement, dx: number, dy: number): Placement {
+  return { ...placement, x: placement.x + dx, y: placement.y + dy };
+}
+
+/** Uniform scale keeps rotation exact when scaling around a world pivot. */
+export function scalePlacementAround(placement: Placement, pivot: Point, factor: number): Placement {
+  return {
+    ...placement,
+    x: pivot.x + (placement.x - pivot.x) * factor,
+    y: pivot.y + (placement.y - pivot.y) * factor,
+    scaleX: placement.scaleX * factor,
+    scaleY: placement.scaleY * factor,
+  };
+}
+
+/** Single-axis resize around a world pivot; the other axis stays untouched. */
+export function scalePlacementAxisAround(
+  placement: Placement,
+  pivot: Point,
+  axis: "x" | "y",
+  factor: number,
+): Placement {
+  return axis === "x"
+    ? {
+        ...placement,
+        x: pivot.x + (placement.x - pivot.x) * factor,
+        scaleX: placement.scaleX * factor,
+      }
+    : {
+        ...placement,
+        y: pivot.y + (placement.y - pivot.y) * factor,
+        scaleY: placement.scaleY * factor,
+      };
+}
+
+export function rotatePlacementAround(placement: Placement, pivot: Point, degrees: number): Placement {
+  const radians = (degrees * Math.PI) / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  const dx = placement.x - pivot.x;
+  const dy = placement.y - pivot.y;
+  return {
+    ...placement,
+    x: pivot.x + dx * cosine - dy * sine,
+    y: pivot.y + dx * sine + dy * cosine,
+    rotation: placement.rotation + degrees,
+  };
+}
+
+/** Mirrors the artwork around a world pivot, including its rotation direction. */
+export function flipPlacement(placement: Placement, axis: "x" | "y", pivot: Point): Placement {
+  if (axis === "x") {
+    return {
+      ...placement,
+      x: 2 * pivot.x - placement.x,
+      scaleX: -placement.scaleX,
+      rotation: -placement.rotation,
+    };
+  }
+  return {
+    ...placement,
+    y: 2 * pivot.y - placement.y,
+    scaleY: -placement.scaleY,
+    rotation: -placement.rotation,
+  };
+}
+
+export type AlignMode = "left" | "centerX" | "right" | "bottom" | "centerY" | "top";
+
+/** Aligns each placed rectangle to an edge or center of the target rectangle. */
+export function alignPlacedRects(items: PlacedRect[], mode: AlignMode, target: Rect): Array<{ id: string; placement: Placement }> {
+  return items.map((item) => {
+    const current = transformRect(item.bounds, item.placement);
+    let dx = 0;
+    let dy = 0;
+    if (mode === "left") dx = target.xMin - current.xMin;
+    else if (mode === "centerX") dx = (target.xMin + target.xMax) / 2 - (current.xMin + current.xMax) / 2;
+    else if (mode === "right") dx = target.xMax - current.xMax;
+    else if (mode === "bottom") dy = target.yMin - current.yMin;
+    else if (mode === "centerY") dy = (target.yMin + target.yMax) / 2 - (current.yMin + current.yMax) / 2;
+    else dy = target.yMax - current.yMax;
+    return { id: item.id, placement: movePlacement(item.placement, dx, dy) };
+  });
+}
+
+/** Spaces three or more placed rectangles evenly between the outermost centers. */
+export function distributePlacedRects(items: PlacedRect[], axis: "x" | "y"): Array<{ id: string; placement: Placement }> {
+  if (items.length < 3) return items.map((item) => ({ id: item.id, placement: item.placement }));
+  const centers = items.map((item) => {
+    const rect = transformRect(item.bounds, item.placement);
+    return axis === "x" ? (rect.xMin + rect.xMax) / 2 : (rect.yMin + rect.yMax) / 2;
+  });
+  const order = items.map((_, index) => index).sort((a, b) => centers[a] - centers[b] || items[a].id.localeCompare(items[b].id));
+  const first = centers[order[0]];
+  const last = centers[order[order.length - 1]];
+  const spacing = (last - first) / (order.length - 1);
+  const result = items.map((item) => ({ id: item.id, placement: item.placement }));
+  order.forEach((originalIndex, rank) => {
+    const current = centers[originalIndex];
+    const desired = first + spacing * rank;
+    const delta = desired - current;
+    result[originalIndex].placement = movePlacement(
+      result[originalIndex].placement,
+      axis === "x" ? delta : 0,
+      axis === "y" ? delta : 0,
+    );
+  });
+  return result;
 }

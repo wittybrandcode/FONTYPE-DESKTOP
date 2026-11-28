@@ -36,6 +36,7 @@ export function IconButton({
   ...rest
 }: IconButtonProps) {
   const tip = shortcut ? `${label} (${shortcut})` : label;
+  const textId = useId();
   return (
     <button
       type="button"
@@ -43,10 +44,29 @@ export function IconButton({
       className={`icon-btn icon-btn--${variant} icon-btn--${tone} ${active ? "is-active" : ""} has-tip ${className}`.trim()}
       data-tip={tip}
       aria-label={label}
+      aria-describedby={textId}
       aria-keyshortcuts={shortcut ? ariaShortcut(shortcut) : undefined}
       aria-pressed={active}
     >
       <Icon name={icon} size={size} weight={active ? "fill" : "regular"} />
+      <span id={textId} className="sr-only">{tip}</span>
+    </button>
+  );
+}
+
+/** Compact info affordance: guidance stays out of the layout but is reachable by hover and keyboard. */
+export function InfoTip({ tip, className = "" }: { tip: string; className?: string }) {
+  const textId = useId();
+  return (
+    <button
+      type="button"
+      className={`info-tip has-tip ${className}`.trim()}
+      data-tip={tip}
+      aria-label={tip}
+      aria-describedby={textId}
+    >
+      <Icon name="info" size={13} />
+      <span id={textId} className="sr-only">{tip}</span>
     </button>
   );
 }

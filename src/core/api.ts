@@ -46,6 +46,23 @@ export const api = {
       advanceWidth,
       mode,
     }),
+  /** M3ب — writes only the existing previewPath/bounds/count fields. */
+  setPreviewPath: (
+    path: string,
+    slotId: string,
+    previewPath: string,
+    bounds: [number, number, number, number],
+    contours: number,
+    segments: number,
+  ) =>
+    invoke<GlyphSlot>("set_preview_path", {
+      path,
+      slotId,
+      previewPath,
+      bounds,
+      contours,
+      segments,
+    }),
   removeArtwork: (path: string, slotId: string) =>
     invoke<GlyphSlot>("remove_artwork", { path, slotId }),
   approveSlot: (path: string, slotId: string) =>
@@ -238,13 +255,15 @@ export function shapePreview(
   fontPath: string,
   text: string,
   mode: string,
+  onJob?: (jobId: string) => void,
 ): Promise<Record<string, unknown>> {
-  return runEngineJob("shape_preview", {
-    fontPath,
-    text,
-    mode,
-    glyphs: projectGlyphParams(handle),
-  });
+  return runEngineJob(
+    "shape_preview",
+    { fontPath, text, mode, glyphs: projectGlyphParams(handle) },
+    undefined,
+    180_000,
+    onJob,
+  );
 }
 
 export function runShapingCorpus(

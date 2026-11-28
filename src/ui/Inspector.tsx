@@ -37,6 +37,7 @@ export function InspectorSection({
   onToggle,
   badge,
   tone = "neutral",
+  hidden = false,
   children,
 }: {
   title: string;
@@ -45,10 +46,12 @@ export function InspectorSection({
   onToggle: () => void;
   badge?: ReactNode;
   tone?: "neutral" | "warning" | "danger";
+  /** M6 — contextual folds are removed from view without losing their state. */
+  hidden?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="inspector-section">
+    <div className="inspector-section" hidden={hidden}>
       <AccordionSection
         title={title}
         icon={icon}

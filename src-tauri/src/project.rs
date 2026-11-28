@@ -263,6 +263,25 @@ mod tests {
     }
 
     #[test]
+    fn bundled_sample_project_loads() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("samples")
+            .join("sample-alef.afsp");
+        let (project, notes) = read_project(&root).unwrap();
+        assert!(notes.is_empty());
+        assert_eq!(project.schema_version, SCHEMA_VERSION);
+        assert_eq!(project.glyph_slots.len(), 1);
+        let slot = &project.glyph_slots[0];
+        assert_eq!(slot.slot_id, "alef.isolated");
+        assert_eq!(slot.status, "ready");
+        let import = slot.import.as_ref().unwrap();
+        assert_eq!(import.contours, 1);
+        assert!(import.preview_path.starts_with("M273.75"));
+        assert!(root.join(slot.original_svg.clone().unwrap()).is_file());
+    }
+
+    #[test]
     fn invalid_project_name_is_rejected() {
         let parent = temp_parent();
         let result = create_project(

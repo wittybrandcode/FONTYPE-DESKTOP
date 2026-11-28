@@ -203,6 +203,65 @@ pub fn import_svg(
     Ok(result)
 }
 
+/// M3ب — persists an edited Bezier path without changing the `.afsp` schema.
+///
+/// Only `previewPath`, `bounds`, `contours` and `segments` are rewritten. The
+/// original SVG, content hash, import timestamp, matrix and source revisions
+/// stay untouched, so Phase 0–8 projects remain byte-compatible.
+#[command]
+pub fn set_preview_path(
+    path: String,
+    slot_id: String,
+    preview_path: String,
+    bounds: Vec<f64>,
+    contours: u32,
+    segments: u32,
+) -> Result<GlyphSlot, String> {
+    if preview_path.trim().is_empty() {
+        return Err("لا يمكن حفظ مسار فارغ.".into());
+    }
+    if bounds.len() != 4 || bounds.iter().any(|value| !value.is_finite()) {
+        return Err("حدود المسار غير صالحة.".into());
+    }
+    if bounds[2] < bounds[0] || bounds[3] < bounds[1] {
+        return Err("حدود المسار غير صالحة.".into());
+    }
+    let root = normalize_root(path)?;
+    let (mut project, _) = read_project(&root)?;
+    let upm = project.font.units_per_em;
+    let metrics = project.metrics.clone();
+    let index = project
+        .glyph_slots
+        .iter()
+        .position(|slot| slot.slot_id == slot_id)
+        .ok_or_else(|| "الخانة المطلوبة غير موجودة في المشروع.".to_string())?;
+    let old_import = project.glyph_slots[index]
+        .import
+        .clone()
+        .ok_or_else(|| "لا يوجد مسار مستورد لهذه الخانة.".to_string())?;
+
+    let mut updated = old_import.clone();
+    updated.preview_path = preview_path;
+    updated.bounds = [bounds[0], bounds[1], bounds[2], bounds[3]];
+    updated.contours = contours;
+    updated.segments = segments;
+    let geometry_changed = crate::anchors::geometry_changed_materially(&old_import, &updated, upm);
+
+    {
+        let slot = &mut project.glyph_slots[index];
+        slot.import = Some(updated);
+        if geometry_changed {
+            crate::anchors::flag_anchors_for_review(slot);
+        }
+        slot.approved_at = None;
+        crate::anchors::refresh_validation(slot, &metrics, upm);
+        slot.status = crate::anchors::derive_status(slot).into();
+    }
+    let result = project.glyph_slots[index].clone();
+    write_project(&root, &project)?;
+    Ok(result)
+}
+
 #[command]
 pub fn remove_artwork(path: String, slot_id: String) -> Result<GlyphSlot, String> {
     let root = normalize_root(path)?;
@@ -378,6 +437,88 @@ mod tests {
         let removed = remove_artwork(handle.path.clone(), slot_id).unwrap();
         assert_eq!(removed.status, "empty");
         assert_eq!(removed.source_revisions.len(), 2);
+
+        fs::remove_dir_all(&parent).unwrap();
+    }
+
+    #[test]
+    fn preview_path_edit_roundtrips_without_schema_changes() {
+        let parent = std::env::temp_dir().join(format!("fontype-path-edit-{}", std::process::id()));
+        fs::create_dir_all(&parent).unwrap();
+        let svg = parent.join("artwork.svg");
+        fs::write(&svg, "<svg viewBox='0 0 300 500'/>").unwrap();
+
+        let handle = create_project(
+            parent.to_string_lossy().into_owned(),
+            "PathEdit".into(),
+            "Family".into(),
+            "Regular".into(),
+            1000,
+        )
+        .unwrap();
+        let slot_id = "beh.initial".to_string();
+        let imported = import_svg(
+            handle.path.clone(),
+            slot_id.clone(),
+            inspection(&svg.to_string_lossy()),
+            Some(620.0),
+            Some("fit_to_em".into()),
+        )
+        .unwrap();
+        let original = imported.import.clone().unwrap();
+
+        // A Phase 0–8 project file has no path-model fields at all. Rewriting
+        // project.json without them must still load before the path is edited.
+        let project_file = PathBuf::from(&handle.path).join("project.json");
+        let legacy = fs::read_to_string(&project_file).unwrap();
+        assert!(!legacy.contains("pathModel"));
+        assert!(!legacy.contains("nodeIds"));
+
+        let edited_path = "M10 20 C30 0 70 0 90 20 Z".to_string();
+        let saved = set_preview_path(
+            handle.path.clone(),
+            slot_id.clone(),
+            edited_path.clone(),
+            vec![10.0, 0.0, 90.0, 20.0],
+            1,
+            2,
+        )
+        .unwrap();
+        let after = saved.import.clone().unwrap();
+        assert_eq!(after.preview_path, edited_path);
+        assert_eq!(after.bounds, [10.0, 0.0, 90.0, 20.0]);
+        assert_eq!(after.contours, 1);
+        assert_eq!(after.segments, 2);
+        assert_eq!(after.content_hash, original.content_hash);
+        assert_eq!(after.source_file_name, original.source_file_name);
+        assert_eq!(after.imported_at, original.imported_at);
+        assert_eq!(after.matrix, original.matrix);
+        assert_eq!(
+            saved.source_revisions.len(),
+            imported.source_revisions.len()
+        );
+        assert_eq!(saved.metrics.advance_width, imported.metrics.advance_width);
+        assert_eq!(saved.anchors.len(), imported.anchors.len());
+        assert!(saved.approved_at.is_none());
+
+        let (reopened, _) = crate::project::read_project(&PathBuf::from(&handle.path)).unwrap();
+        let reopened_slot = reopened
+            .glyph_slots
+            .iter()
+            .find(|slot| slot.slot_id == slot_id)
+            .unwrap();
+        assert_eq!(
+            reopened_slot.import.as_ref().unwrap().preview_path,
+            edited_path
+        );
+        assert_eq!(
+            reopened_slot.import.as_ref().unwrap().bounds,
+            [10.0, 0.0, 90.0, 20.0]
+        );
+        assert!(reopened_slot.original_svg.is_some());
+        assert!(PathBuf::from(&handle.path)
+            .join(reopened_slot.original_svg.clone().unwrap())
+            .is_file());
 
         fs::remove_dir_all(&parent).unwrap();
     }

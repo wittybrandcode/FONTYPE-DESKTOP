@@ -1,8 +1,9 @@
 /* ==========================================================================
    FONTYPE — design tokens
    Neutral, desktop-studio palette. One source of truth for the Phase 7 UI.
-   Color rule: neutral grays carry the interface; blue is reserved for focus,
-   selection and active state; green appears only for the `ready` state.
+   Color rule (updated): neutral grays carry the interface; solid blue fills only primary actions;
+   blue also marks focus, selection and active state; green appears only for `ready`.
+    Primary buttons use no stroke and always carry white icons/labels.
    ========================================================================== */
 :root {
   color-scheme: dark;
@@ -50,6 +51,12 @@
   /* Functional accents */
   --accent: #4b9fff; /* focus, selection, active tab */
   --accent-dark: #2f6fb5;
+  /* Solid primary actions — no stroke; darken on hover/press, never glow. */
+  --accent-fill: #2f6fb5; /* 5.2:1 against white */
+  --accent-fill-hover: #285f9e;
+  --accent-fill-active: #214f86;
+  --accent-fill-disabled: #2b3a4b;
+  --on-accent: #ffffff;
   --accent-soft: rgba(75, 159, 255, 0.14);
   --accent-glow: transparent; /* removed */
   --accent-2: #6fa8ff;
@@ -64,6 +71,7 @@
   --warning: #d9a441;
   --warning-soft: rgba(217, 164, 65, 0.13);
   --danger: #e46a6a;
+  --danger-text: #ff9b9b; /* AA on dark danger-soft fills */
   --danger-soft: rgba(228, 106, 106, 0.13);
   --violet: #b18ce0;
   --violet-soft: rgba(177, 140, 224, 0.13);
@@ -128,11 +136,20 @@
   .dock-resizer, .inspector-resizer { border: 1px solid CanvasText; }
   .ruler, .ws-canvas, .inspector-head, .panel-header { border-color: CanvasText; }
   .metric-line, .workspace-guide, .workspace-artwork, .anchor-marker circle,
-  .anchor-connection, .em-frame { forced-color-adjust: none; }
+  .anchor-connection, .em-frame, .ws-marquee, .ws-transform-outline,
+  .ws-transform-stem, .ws-transform-handle, .ws-transform-rotate,
+  .ws-minimap, .mini-glyph, .mini-viewport, .onion-skin, .subpath-outline,
+  .form-cell svg path { forced-color-adjust: none; }
   .metric-line { stroke: CanvasText; }
   .workspace-guide, .workspace-artwork, .anchor-marker circle,
-  .anchor-connection { stroke: Highlight; }
-  .workspace-artwork { fill: CanvasText; }
-  .anchor-marker circle { fill: Canvas; }
+  .anchor-connection, .ws-transform-outline, .ws-transform-stem,
+  .ws-transform-handle, .ws-transform-rotate, .mini-viewport,
+  .subpath-outline { stroke: Highlight; }
+  .onion-skin { stroke: CanvasText; }
+  .workspace-artwork, .form-cell svg path { fill: CanvasText; }
+  .anchor-marker circle, .ws-transform-handle, .ws-transform-rotate { fill: Canvas; }
   .em-frame { stroke: CanvasText; }
+  .ws-marquee { fill: Canvas; stroke: Highlight; }
+  .mini-glyph { fill: Canvas; stroke: CanvasText; }
+  .mini-glyph.is-selected { stroke: Highlight; }
 }

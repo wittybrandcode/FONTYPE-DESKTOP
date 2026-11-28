@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "0.1.0",
+  "projectId": "sample-alef",
+  "font": {
+    "familyName": "نموذج الف",
+    "styleName": "Regular",
+    "version": "1.000",
+    "designer": "FONTYPE",
+    "copyright": "نموذج تعليمي مرفق مع التطبيق",
+    "license": "MIT",
+    "unitsPerEm": 1000,
+    "characterSetPreset": "arabic-core"
+  },
+  "metrics": {
+    "baseline": 0,
+    "ascender": 800,
+    "descender": -250,
+    "capHeight": 700,
+    "arabicBodyHeight": 500,
+    "markTopZone": 850,
+    "markBottomZone": -350,
+    "metricLocks": {
+      "baseline": true,
+      "ascender": false,
+      "descender": false,
+      "capHeight": false,
+      "arabicBodyHeight": false,
+      "markTopZone": false,
+      "markBottomZone": false
+    },
+    "metricVisibility": {
+      "baseline": true,
+      "ascender": true,
+      "descender": true,
+      "capHeight": false,
+      "arabicBodyHeight": false,
+      "markTopZone": false,
+      "markBottomZone": false
+    }
+  },
+  "workspace": {
+    "rulersVisible": true,
+    "gridVisible": true,
+    "gridMajorStep": 100,
+    "gridMinorDivisions": 5,
+    "snapEnabled": true,
+    "snapTolerancePx": 8,
+    "snapTargets": {
+      "grid": false,
+      "metricLines": true,
+      "guides": true,
+      "glyphBounds": true,
+      "advanceBoundaries": true,
+      "outlineNodes": true,
+      "anchors": true
+    },
+    "guides": [],
+    "uiLanguage": "ar"
+  },
+  "shaping": {
+    "lamAlefLigatures": false,
+    "markPositioning": true,
+    "cursivePositioning": true
+  },
+  "glyphSlots": [
+    {
+      "slotId": "alef.isolated",
+      "characterName": "ألف",
+      "unicode": "0627",
+      "glyphName": "alef.isol",
+      "form": "isolated",
+      "joiningType": "R",
+      "group": "alef",
+      "markClass": null,
+      "required": true,
+      "originalSvg": "glyphs/alef/isolated.svg",
+      "sourceRevisions": [],
+      "import": {
+        "mode": "fit_to_em",
+        "viewBox": [0, 0, 600, 800],
+        "sourceWidth": 600,
+        "sourceHeight": 800,
+        "scale": 0.875,
+        "matrix": [0.875, 0, 0, -0.875, 37.5, 612.5],
+        "sourceFileName": "isolated.svg",
+        "contentHash": "sha256:573ddadead384c87ba24da3df05185b0b5d9cf4cea946878eb061f3226d48dd7",
+        "importedAt": "2026-11-28T00:00:00Z",
+        "contours": 1,
+        "segments": 8,
+        "bounds": [221.25, 0, 378.75, 551.25],
+        "findings": [],
+        "previewPath": "M273.75 0.0V507.5H221.25V551.25H378.75V507.5H326.25V0.0H273.75Z"
+      },
+      "placement": { "x": 0, "y": 0, "scaleX": 1, "scaleY": 1, "rotation": 0 },
+      "metrics": { "advanceWidth": 500, "leftSideBearing": 100, "rightSideBearing": 100 },
+      "anchors": [
+        {
+          "anchorId": "alef.isolated-top",
+          "name": "top",
+          "class": "top",
+          "x": 300,
+          "y": 551.25,
+          "scope": "slot",
+          "locked": false,
+          "geometryKey": "sha256:573ddadead384c87ba24da3df05185b0b5d9cf4cea946878eb061f3226d48dd7",
+          "needsReview": false,
+          "reviewNote": ""
+        },
+        {
+          "anchorId": "alef.isolated-bottom",
+          "name": "bottom",
+          "class": "bottom",
+          "x": 300,
+          "y": 0,
+          "scope": "slot",
+          "locked": false,
+          "geometryKey": "sha256:573ddadead384c87ba24da3df05185b0b5d9cf4cea946878eb061f3226d48dd7",
+          "needsReview": false,
+          "reviewNote": ""
+        },
+        {
+          "anchorId": "alef.isolated-entry",
+          "name": "entry",
+          "class": "cursive-entry",
+          "x": 221.25,
+          "y": 260,
+          "scope": "slot",
+          "locked": false,
+          "geometryKey": "sha256:573ddadead384c87ba24da3df05185b0b5d9cf4cea946878eb061f3226d48dd7",
+          "needsReview": false,
+          "reviewNote": ""
+        },
+        {
+          "anchorId": "alef.isolated-exit",
+          "name": "exit",
+          "class": "cursive-exit",
+          "x": 378.75,
+          "y": 260,
+          "scope": "slot",
+          "locked": false,
+          "geometryKey": "sha256:573ddadead384c87ba24da3df05185b0b5d9cf4cea946878eb061f3226d48dd7",
+          "needsReview": false,
+          "reviewNote": ""
+        }
+      ],
+      "status": "ready",
+      "approvedAt": "2026-11-28T00:00:00Z",
+      "validation": []
+    }
+  ],
+  "builds": [],
+  "createdAt": "2026-11-28T00:00:00Z",
+  "updatedAt": "2026-11-28T00:00:00Z"
+}

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, buildFontSource, runEngineJob } from "./core/api";
+import { buildReadiness } from "./core/readiness";
 import type { ProjectHandle } from "./core/types";
 import BuildPanel from "./components/BuildPanel";
 import EnginePanel from "./components/EnginePanel";
@@ -52,6 +53,7 @@ export default function App() {
   const [editor, setEditor] = useState<EditorActions | null>(null);
   const toastId = useRef(0);
   const registerEditor = useCallback((actions: EditorActions | null) => setEditor(actions), []);
+  const readiness = useMemo(() => buildReadiness(project), [project]);
 
   useEffect(() => {
     api
@@ -193,6 +195,10 @@ export default function App() {
     { id: "check-engine", label: "فحص صحة المحرك", description: "التحقق من Python والأدوات المحلية", group: "النظام", icon: "shield", run: () => { setTab("engine"); void checkEngine(); } },
     { id: "toggle-sidebar", label: sidebarOpen ? "إخفاء لوحة المشروع" : "إظهار لوحة المشروع", group: "العرض", icon: "sidebar", run: () => setSidebarOpen((value) => !value) },
     { id: "shortcuts", label: "اختصارات لوحة المفاتيح", group: "العرض", icon: "keyboard", shortcut: "?", run: () => setShortcutsOpen(true) },
+    ...(editor?.commands ?? []).map((command) => ({
+      ...command,
+      icon: command.icon as IconName,
+    })),
   ];
 
   const menuGroups: MenuGroup[] = [
@@ -250,6 +256,8 @@ export default function App() {
   ];
 
   const activeTab = TABS.find((item) => item.id === tab) ?? TABS[0];
+  const readinessTip = readiness.checks.filter((item) => !item.ok)
+    .map((item) => `${item.label}: ${item.detail}`).join("\n") || readiness.summary;
 
   return (
     <div className="app-shell">
@@ -276,6 +284,17 @@ export default function App() {
           onClick={() => setSidebarOpen((value) => !value)}
         />
         <IconButton icon="shield" label="فحص المحرك" onClick={() => { setTab("engine"); void checkEngine(); }} />
+        <button
+          type="button"
+          className={`readiness-chip readiness-chip--${readiness.level} has-tip`}
+          data-tip={readinessTip}
+          aria-describedby="readiness-tip"
+          onClick={() => setTab("build")}
+        >
+          <Icon name={readiness.level === "ready" ? "checkCircle" : readiness.level === "blocked" ? "warning" : "info"} size={13} />
+          <span>{readiness.summary}</span>
+          <span id="readiness-tip" className="sr-only">{readinessTip}</span>
+        </button>
         <ToolbarDivider />
 
         <button type="button" className="tool-bar-command" onClick={() => setCommandOpen(true)}>

@@ -24,6 +24,7 @@ pub fn run() {
             inventory::preset_info,
             inventory::generate_inventory,
             import::import_svg,
+            import::set_preview_path,
             import::remove_artwork,
             import::approve_slot,
             import::set_slot_metrics,

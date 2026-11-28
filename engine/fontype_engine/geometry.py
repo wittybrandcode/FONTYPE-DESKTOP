@@ -297,52 +297,68 @@ class Outline:
     matrix: Matrix
 
 
-def build_outline(
-    parsed: ParsedSvg,
-    matrix: Matrix,
+def build_outline_entries(
+    entries: list[tuple[ParsedSvg, Matrix]],
     *,
     advance_width: float,
     align_baseline: bool = True,
     center_in_advance: bool = True,
 ) -> Outline:
+    """Merge several parsed sources into one baseline-aligned font outline.
+
+    Each source keeps its own viewBox-to-font transform; a single global shift
+    then centers the union of all shapes in the advance width. The first source
+    matrix is reported for informational import metadata.
+    """
+    if not entries:
+        raise EngineError("SVG_NO_PATHS", "لم يتم العثور على أي مسار متجهي في الملف.")
+
     merged = RecordingPen()
-    findings = list(parsed.findings)
+    findings: list[dict[str, str]] = []
     contour_count = 0
     segment_count = 0
+    representative_matrix: Matrix = IDENTITY
 
-    for d, transform in parsed.paths:
-        local_pen = RecordingPen()
-        effective = compose(matrix, parse_transform(transform))
-        try:
-            parse_path(d, TransformPen(local_pen, effective))
-        except Exception as exc:
-            raise EngineError(
-                "SVG_BAD_PATH", "أحد المسارات غير صالح أو يحتوي أمراً غير مدعوم."
-            ) from exc
+    for index, (parsed, matrix) in enumerate(entries):
+        if index == 0:
+            representative_matrix = matrix
+        findings.extend(parsed.findings)
+        for d, transform in parsed.paths:
+            local_pen = RecordingPen()
+            effective = compose(matrix, parse_transform(transform))
+            try:
+                parse_path(d, TransformPen(local_pen, effective))
+            except Exception as exc:
+                raise EngineError(
+                    "SVG_BAD_PATH", "أحد المسارات غير صالح أو يحتوي أمراً غير مدعوم."
+                ) from exc
 
-        open_contour = False
-        local_contours = 0
-        for operation, _args in local_pen.value:
-            if operation == "moveTo":
-                if open_contour:
-                    findings.append(
-                        _finding(
-                            "warning", "OPEN_CONTOUR", "مسار مفتوح؛ سيُغلق عند التحويل."
+            open_contour = False
+            local_contours = 0
+            for operation, _args in local_pen.value:
+                if operation == "moveTo":
+                    if open_contour:
+                        findings.append(
+                            _finding(
+                                "warning",
+                                "OPEN_CONTOUR",
+                                "مسار مفتوح؛ سيُغلق عند التحويل.",
+                            )
                         )
+                    open_contour = True
+                    local_contours += 1
+                elif operation == "closePath":
+                    open_contour = False
+                elif operation in {"lineTo", "curveTo", "qCurveTo"}:
+                    segment_count += 1
+            if open_contour:
+                findings.append(
+                    _finding(
+                        "warning", "OPEN_CONTOUR", "مسار مفتوح؛ سيُغلق عند التحويل."
                     )
-                open_contour = True
-                local_contours += 1
-            elif operation == "closePath":
-                open_contour = False
-            elif operation in {"lineTo", "curveTo", "qCurveTo"}:
-                segment_count += 1
-        if open_contour:
-            findings.append(
-                _finding("warning", "OPEN_CONTOUR", "مسار مفتوح؛ سيُغلق عند التحويل.")
-            )
-        contour_count += local_contours
-
-        merged.value.extend(local_pen.value)
+                )
+            contour_count += local_contours
+            merged.value.extend(local_pen.value)
 
     bounds_pen = BoundsPen(None)
     merged.replay(bounds_pen)
@@ -367,13 +383,13 @@ def build_outline(
                 )
             shifted.value.append((operation, args))
         merged = shifted
-        final_matrix = compose((1, 0, 0, 1, dx, dy), matrix)
+        final_matrix = compose((1, 0, 0, 1, dx, dy), representative_matrix)
         x_min += dx
         x_max += dx
         y_min += dy
         y_max += dy
     else:
-        final_matrix = matrix
+        final_matrix = representative_matrix
 
     return Outline(
         pen=merged,
@@ -382,4 +398,20 @@ def build_outline(
         segment_count=segment_count,
         findings=findings,
         matrix=final_matrix,
+    )
+
+
+def build_outline(
+    parsed: ParsedSvg,
+    matrix: Matrix,
+    *,
+    advance_width: float,
+    align_baseline: bool = True,
+    center_in_advance: bool = True,
+) -> Outline:
+    return build_outline_entries(
+        [(parsed, matrix)],
+        advance_width=advance_width,
+        align_baseline=align_baseline,
+        center_in_advance=center_in_advance,
     )
