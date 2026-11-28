@@ -14,6 +14,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(EngineState::discover())
         .invoke_handler(tauri::generate_handler![
+            project::project_summaries,
             project::create_project,
             project::open_project,
             project::save_project,
@@ -24,6 +25,7 @@ pub fn run() {
             inventory::preset_info,
             inventory::generate_inventory,
             import::import_svg,
+            import::set_preview_path,
             import::remove_artwork,
             import::approve_slot,
             import::set_slot_metrics,

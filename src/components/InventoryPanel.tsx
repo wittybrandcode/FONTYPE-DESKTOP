@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open } from "@tauri-apps/plugin-dialog";
-import { api, runEngineJob } from "../core/api";
+import { api } from "../core/api";
+import { inspectSvgSources, pickSvgFiles } from "../core/svgImport";
 import type {
   GlyphSlot,
   PresetInfo,
@@ -73,7 +73,7 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [sourcePath, setSourcePath] = useState("");
+  const [sourcePaths, setSourcePaths] = useState<string[]>([]);
   const [inspection, setInspection] = useState<SvgInspection | null>(null);
   const [inspectedSlotId, setInspectedSlotId] = useState<string | null>(null);
   const [mode, setMode] = useState("fit_to_em");
@@ -143,24 +143,30 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
     }
   }
 
-  async function inspectFile(path: string, slotId: string, overrideMode?: string) {
-    if (!path) return;
+  async function inspectSources(
+    paths: string[],
+    slotId: string,
+    overrideMode?: string,
+    widthOverride?: number,
+  ) {
+    if (paths.length === 0) return;
     setInspecting(true);
     setPreviewError("");
-    const activeMode = overrideMode ?? mode;
-    const params: Record<string, unknown> = {
-      svgPath: path,
-      upm,
-      mode: activeMode,
-      advanceWidth,
-      fitRatio,
-      referenceHeight,
-      manualScale,
-    };
     try {
-      const data = (await runEngineJob("inspect_svg", params)) as unknown as SvgInspection;
-      setInspection(data);
+      const result = await inspectSvgSources(
+        paths,
+        {
+          upm,
+          advanceWidth: widthOverride ?? advanceWidth,
+          fitRatio,
+          referenceHeight,
+          manualScale,
+        },
+        overrideMode ?? mode,
+      );
+      setInspection(result.inspection);
       setInspectedSlotId(slotId);
+      setMode(result.mode);
     } catch (error) {
       setInspection(null);
       setPreviewError(error instanceof Error ? error.message : String(error));
@@ -176,13 +182,22 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
     if (!selected.originalSvg) {
       setInspection(null);
       setInspectedSlotId(null);
-      setSourcePath("");
+      setSourcePaths([]);
       return;
     }
     const stored = `${project.path.replace(/\\/g, "/")}/${selected.originalSvg}`;
-    if (inspectedSlotId === selected.slotId && sourcePath === stored) return;
-    setSourcePath(stored);
-    void inspectFile(stored, selected.slotId, selected.import?.mode ?? "fit_to_em");
+    if (
+      inspectedSlotId === selected.slotId &&
+      sourcePaths.length === 1 &&
+      sourcePaths[0] === stored
+    ) return;
+    setSourcePaths([stored]);
+    void inspectSources(
+      [stored],
+      selected.slotId,
+      selected.import?.mode ?? "fit_to_em",
+      selected.metrics.advanceWidth,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.slotId]);
 
@@ -207,8 +222,8 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
     const targetSlot = slots.find((slot) => slot.slotId === targetId);
     setSelectedId(targetId);
     setAdvanceWidth(targetSlot?.metrics.advanceWidth ?? 600);
-    setSourcePath(svg);
-    void inspectFile(svg, targetId);
+    setSourcePaths([svg]);
+    void inspectSources([svg], targetId, undefined, targetSlot?.metrics.advanceWidth ?? 600);
   };
 
   useEffect(() => {
@@ -251,14 +266,10 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
   }, []);
 
   async function pickSvg() {
-    const picked = await open({
-      multiple: false,
-      filters: [{ name: "SVG", extensions: ["svg"] }],
-      title: "اختر رسم الخانة الحالية",
-    });
-    if (typeof picked !== "string") return;
-    setSourcePath(picked);
-    await inspectFile(picked, selected?.slotId ?? "");
+    const picked = await pickSvgFiles();
+    if (picked.length === 0) return;
+    setSourcePaths(picked);
+    await inspectSources(picked, selected?.slotId ?? "");
   }
 
   async function commitImport() {
@@ -273,7 +284,12 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
         mode,
       );
       patchSlot(updated);
-      onNotice(`تم استيراد الخانة ${selected.glyphName}`, "ok");
+      onNotice(
+        sourcePaths.length > 1
+          ? `تم استيراد ${sourcePaths.length} أشكال في الخانة ${selected.glyphName}`
+          : `تم استيراد الخانة ${selected.glyphName}`,
+        "ok",
+      );
     } catch (error) {
       onNotice(String(error), "error");
     } finally {
@@ -466,16 +482,19 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
               <label>طريقة الاستيراد</label>
               <select
                 value={mode}
+                disabled={sourcePaths.length > 1}
                 onChange={(event) => {
                   const next = event.target.value;
-                  setMode(next);
-                  if (sourcePath) void inspectFile(sourcePath, selected.slotId, next);
+                  if (sourcePaths.length > 0) void inspectSources(sourcePaths, selected.slotId, next);
                 }}
               >
                 {Object.entries(MODE_LABELS).map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
                 ))}
               </select>
+              {sourcePaths.length > 1 ? (
+                <p className="hint">تم دمج الملفات في رسم واحد داخل الخانة؛ تُحفظ هوية الخانة من المشروع.</p>
+              ) : null}
 
               {mode === "fit_to_em" ? (
                 <>
@@ -507,7 +526,7 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
               <input type="number" value={advanceWidth} onChange={(event) => setAdvanceWidth(Number(event.target.value))} />
 
               <div className="button-row">
-                <button onClick={() => sourcePath && inspectFile(sourcePath, selected.slotId)} disabled={!sourcePath || inspecting}>
+                <button onClick={() => sourcePaths.length > 0 && void inspectSources(sourcePaths, selected.slotId)} disabled={sourcePaths.length === 0 || inspecting}>
                   إعادة الفحص
                 </button>
                 <button className="primary" onClick={commitImport} disabled={!canCommit || saving}>
@@ -517,7 +536,11 @@ export default function InventoryPanel({ project, onProject, onNotice }: Props) 
               </div>
 
               {previewError ? <div className="alert error">{previewError}</div> : null}
-              {sourcePath ? <p className="hint path">المصدر: {sourcePath}</p> : null}
+              {sourcePaths.length > 0 ? (
+                <p className="hint path">
+                  المصدر: {sourcePaths.length > 1 ? `${sourcePaths.length} ملفات SVG` : sourcePaths[0]}
+                </p>
+              ) : null}
               {selected.sourceRevisions.length > 0 ? (
                 <p className="hint">{selected.sourceRevisions.length} نسخة سابقة محفوظة قابلة للاسترداد.</p>
               ) : null}

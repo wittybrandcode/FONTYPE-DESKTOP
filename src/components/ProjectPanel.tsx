@@ -110,20 +110,20 @@ export default function ProjectPanel({ project, onProject, onNotice }: Props) {
       <div className="panel-body">
         <SectionLabel icon="sparkle">إنشاء مشروع</SectionLabel>
         <div className="form-stack">
-          <label>اسم المشروع</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: خط الربيع" />
+          <label htmlFor="pp-name">اسم المشروع</label>
+          <input id="pp-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: خط الربيع" />
 
-          <label>اسم العائلة</label>
-          <input value={family} onChange={(e) => setFamily(e.target.value)} placeholder="Arabic Spring" />
+          <label htmlFor="pp-family">اسم العائلة</label>
+          <input id="pp-family" value={family} onChange={(e) => setFamily(e.target.value)} placeholder="Arabic Spring" />
 
           <div className="form-row">
             <div>
-              <label>النمط</label>
-              <input value={style} onChange={(e) => setStyle(e.target.value)} />
+              <label htmlFor="pp-style">النمط</label>
+              <input id="pp-style" value={style} onChange={(e) => setStyle(e.target.value)} />
             </div>
             <div>
-              <label>UPM</label>
-              <select value={upm} onChange={(e) => setUpm(Number(e.target.value))}>
+              <label htmlFor="pp-upm">UPM</label>
+              <select id="pp-upm" value={upm} onChange={(e) => setUpm(Number(e.target.value))}>
                 <option value={1000}>1000</option>
                 <option value={2048}>2048</option>
               </select>
@@ -156,14 +156,14 @@ export default function ProjectPanel({ project, onProject, onNotice }: Props) {
 
             <SectionLabel icon="fileText">بيانات التصدير</SectionLabel>
             <div className="form-stack">
-              <label>الإصدار</label>
-              <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.000" dir="ltr" />
-              <label>المصمم</label>
-              <input value={designer} onChange={(e) => setDesigner(e.target.value)} placeholder="اسم المصمم" />
-              <label>حقوق النشر</label>
-              <input value={copyright} onChange={(e) => setCopyright(e.target.value)} placeholder="Copyright …" dir="ltr" />
-              <label>الترخيص</label>
-              <input value={license} onChange={(e) => setLicense(e.target.value)} placeholder="OFL-1.1" dir="ltr" />
+              <label htmlFor="pp-version">الإصدار</label>
+              <input id="pp-version" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.000" dir="ltr" />
+              <label htmlFor="pp-designer">المصمم</label>
+              <input id="pp-designer" value={designer} onChange={(e) => setDesigner(e.target.value)} placeholder="اسم المصمم" />
+              <label htmlFor="pp-copyright">حقوق النشر</label>
+              <input id="pp-copyright" value={copyright} onChange={(e) => setCopyright(e.target.value)} placeholder="Copyright …" dir="ltr" />
+              <label htmlFor="pp-license">الترخيص</label>
+              <input id="pp-license" value={license} onChange={(e) => setLicense(e.target.value)} placeholder="OFL-1.1" dir="ltr" />
             </div>
             <div className="button-row">
               <button onClick={() => void saveExportMetadata()}>حفظ بيانات التصدير</button>

@@ -1,20 +1,37 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import ActivityRail from "./ui/ActivityRail";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { api, buildFontSource, runEngineJob } from "./core/api";
+import { buildReadiness } from "./core/readiness";
+import {
+  loadHomePrefs,
+  loadRecents,
+  mergeSummaries,
+  removeRecent,
+  saveHomePrefs,
+  saveRecents,
+  togglePin,
+  upsertRecent,
+  type HomePrefs,
+  type RecentProject,
+} from "./core/recentProjects";
+import type { ProjectHandle } from "./core/types";
 import BuildPanel from "./components/BuildPanel";
-import CommandPalette, { type CommandAction } from "./ui/CommandPalette";
+import HomePanel from "./components/HomePanel";
 import EnginePanel from "./components/EnginePanel";
-import GlyphWorkspace from "./components/GlyphWorkspace";
+import GlyphWorkspace, { type EditorActions } from "./components/GlyphWorkspace";
 import InventoryPanel from "./components/InventoryPanel";
 import ProjectPanel from "./components/ProjectPanel";
 import SpikePanel from "./components/SpikePanel";
-import { api, runEngineJob } from "./core/api";
-import type { ProjectHandle } from "./core/types";
-import { Icon, type IconName } from "./ui/icons";
-import { IconButton, StatusChip, ToolbarDivider } from "./ui/components";
+import CommandPalette, { type CommandAction } from "./ui/CommandPalette";
+import GlyphDock from "./ui/GlyphDock";
+import MenuBar, { type MenuGroup } from "./ui/MenuBar";
+import ProjectDialog from "./ui/ProjectDialog";
 import ShortcutsDialog from "./ui/ShortcutsDialog";
+import { Icon, type IconName } from "./ui/icons";
+import { DockResizer, EmptyState, IconButton, SegmentedControl, StatusChip, ToolbarDivider } from "./ui/components";
 
-type Tab = "workspace" | "inventory" | "build" | "engine";
+type Tab = "home" | "workspace" | "inventory" | "build" | "engine";
 type NoticeKind = "ok" | "error";
 
 interface Toast {
@@ -24,11 +41,14 @@ interface Toast {
 }
 
 const TABS: Array<{ id: Tab; label: string; description: string; icon: IconName }> = [
+  { id: "home", label: "الرئيسية", description: "المشاريع الأخيرة وبدء العمل", icon: "home" },
   { id: "workspace", label: "مساحة العمل", description: "تحرير الرسوم والمساطر والمراسي", icon: "cursor" },
   { id: "inventory", label: "مخزون الخانات", description: "استيراد الخانات وإدارة حالتها", icon: "grid" },
   { id: "build", label: "البناء والمعاينة", description: "توليد الخط واختبار التشكيل", icon: "pulse" },
   { id: "engine", label: "المحرك", description: "فحص الأدوات والتشخيص", icon: "cube" },
 ];
+
+const VERSION = "v0.6.0";
 
 export default function App() {
   const [project, setProject] = useState<ProjectHandle | null>(null);
@@ -36,12 +56,21 @@ export default function App() {
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
   const [healthStatus, setHealthStatus] = useState<"idle" | "checking" | "ok" | "error">("idle");
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [tab, setTab] = useState<Tab>("workspace");
+  const [tab, setTab] = useState<Tab>("home");
+  const [recents, setRecents] = useState<RecentProject[]>(() => loadRecents());
+  const [homePrefs, setHomePrefs] = useState<HomePrefs>(() => loadHomePrefs());
+  const [refreshing, setRefreshing] = useState(false);
+  const [dockView, setDockView] = useState<"glyphs" | "project" | "engine">("glyphs");
   const [focusSlotId, setFocusSlotId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(272);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [editor, setEditor] = useState<EditorActions | null>(null);
   const toastId = useRef(0);
+  const registerEditor = useCallback((actions: EditorActions | null) => setEditor(actions), []);
+  const readiness = useMemo(() => buildReadiness(project), [project]);
 
   useEffect(() => {
     api
@@ -52,8 +81,47 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    saveRecents(recents);
+  }, [recents]);
+
+  useEffect(() => {
+    saveHomePrefs(homePrefs);
+  }, [homePrefs]);
+
+  const recentPathsKey = recents.map((item) => item.path).join("\u0000");
+
+  useEffect(() => {
+    if (recents.length === 0) return;
+    let cancelled = false;
+    setRefreshing(true);
+    void api
+      .projectSummaries(recents.map((item) => item.path))
+      .then((summaries) => {
+        if (!cancelled) setRecents((list) => mergeSummaries(list, summaries));
+      })
+      .catch(() => {
+        // The stored snapshot remains usable when Rust is unavailable (browser preview).
+      })
+      .finally(() => {
+        if (!cancelled) setRefreshing(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recentPathsKey]);
+
+  useEffect(() => {
+    if (!project) return;
+    const timer = window.setTimeout(() => {
+      setRecents((list) => upsertRecent(list, project));
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [project]);
+
+  useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      const modifier = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      if (modifier && key === "k") {
         event.preventDefault();
         setCommandOpen(true);
         return;
@@ -64,18 +132,33 @@ export default function App() {
         target instanceof HTMLTextAreaElement ||
         target instanceof HTMLSelectElement;
       if (typing) return;
-      if (event.key === "?") setShortcutsOpen(true);
+      if (modifier && key === "o") {
+        event.preventDefault();
+        void openProject();
+      } else if (modifier && key === "s") {
+        event.preventDefault();
+        void saveProject();
+      } else if (modifier && key === "b") {
+        event.preventDefault();
+        setTab("build");
+      } else if (modifier && key === "n") {
+        event.preventDefault();
+        setNewProjectOpen(true);
+      } else if (event.key === "?" && !modifier) {
+        setShortcutsOpen(true);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project]);
 
   function showNotice(text: string, kind: NoticeKind = "ok") {
     const id = ++toastId.current;
     setToasts((current) => [...current, { id, text, kind }].slice(-4));
     window.setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, 5200);
+    }, 4600);
   }
 
   async function checkEngine() {
@@ -92,26 +175,89 @@ export default function App() {
     }
   }
 
+  function recordProject(handle: ProjectHandle) {
+    setRecents((list) => upsertRecent(list, handle));
+  }
+
+  function activateProject(handle: ProjectHandle) {
+    recordProject(handle);
+    setProject(handle);
+    setTab("workspace");
+    showNotice("تم فتح المشروع", "ok");
+    if (handle.migrationNotes.length > 0) showNotice(handle.migrationNotes.join(" · "), "ok");
+  }
+
   async function openProject() {
     try {
       const path = await open({ directory: true, multiple: false, title: "اختر مجلد المشروع (.afsp)" });
       if (typeof path !== "string") return;
-      const handle = await api.openProject(path);
-      setProject(handle);
-      showNotice("تم فتح المشروع", "ok");
-      if (handle.migrationNotes.length > 0) showNotice(handle.migrationNotes.join(" · "), "ok");
+      activateProject(await api.openProject(path));
     } catch (error) {
       showNotice(String(error), "error");
     }
+  }
+
+  async function openRecentProject(path: string) {
+    try {
+      activateProject(await api.openProject(path));
+    } catch (error) {
+      showNotice(`تعذّر فتح المشروع من السجل: ${String(error)}`, "error");
+    }
+  }
+
+  async function refreshRecents() {
+    if (recents.length === 0) return;
+    setRefreshing(true);
+    try {
+      const summaries = await api.projectSummaries(recents.map((item) => item.path));
+      setRecents((list) => mergeSummaries(list, summaries));
+    } catch (error) {
+      showNotice(`تعذّر تحديث سجل المشاريع: ${String(error)}`, "error");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  function removeFromRecents(path: string) {
+    setRecents((list) => removeRecent(list, path));
+    showNotice("أُزيل المشروع من السجل المحلي؛ لم تُحذف ملفاته.", "ok");
   }
 
   async function saveProject() {
     if (!project) return;
     try {
       await api.saveProject(project.path, project.project);
+      recordProject(project);
+      void api
+        .projectSummaries([project.path])
+        .then((summaries) => setRecents((list) => mergeSummaries(list, summaries)))
+        .catch(() => undefined);
       showNotice("تم حفظ المشروع", "ok");
     } catch (error) {
       showNotice(String(error), "error");
+    }
+  }
+
+  async function backupProject() {
+    if (!project) return;
+    try {
+      const path = await api.backupProject(project.path);
+      showNotice(`تم إنشاء نسخة احتياطية: ${path}`, "ok");
+    } catch (error) {
+      showNotice(String(error), "error");
+    }
+  }
+
+  async function generateSource() {
+    if (!project) return;
+    try {
+      const result = await buildFontSource(project);
+      showNotice(
+        `أُنشئ مصدر UFO: ${result.glyphCount ?? 0} حرف · ${result.anchorCount ?? 0} مرساة`,
+        "ok",
+      );
+    } catch (error) {
+      showNotice(`فشل إنشاء مصدر UFO: ${String(error)}`, "error");
     }
   }
 
@@ -120,12 +266,10 @@ export default function App() {
   const review = slots.filter((slot) => slot.status === "needs-review").length;
   const imported = slots.filter((slot) => slot.import !== null).length;
   const healthTone =
-    healthStatus === "ok" ? "accent" : healthStatus === "error" ? "danger" : healthStatus === "checking" ? "warning" : "neutral";
-  const railTone =
-    healthStatus === "ok" ? "ok" : healthStatus === "error" ? "error" : healthStatus === "checking" ? "warn" : "idle";
+    healthStatus === "error" ? "danger" : healthStatus === "checking" ? "warning" : healthStatus === "ok" ? "accent" : "neutral";
   const healthLabel =
     healthStatus === "ok" ? "المحرك جاهز" : healthStatus === "error" ? "المحرك غير جاهز" : healthStatus === "checking" ? "جارٍ فحص المحرك" : "المحرك لم يُفحص";
-  const activeTab = TABS.find((item) => item.id === tab) ?? TABS[0];
+  const familyName = project?.project.font.familyName ?? "لا يوجد مشروع مفتوح";
 
   const commands: CommandAction[] = [
     ...TABS.map((item) => ({
@@ -136,223 +280,298 @@ export default function App() {
       icon: item.icon,
       run: () => setTab(item.id),
     })),
+    { id: "new-project", label: "مشروع جديد", description: "إنشاء مشروع .afsp محلي", group: "المشروع", icon: "plus", shortcut: "Ctrl+N", run: () => setNewProjectOpen(true) },
+    { id: "open-project", label: "فتح مشروع", description: "فتح مجلد مشروع .afsp من القرص المحلي", group: "المشروع", icon: "folderOpen", shortcut: "Ctrl+O", run: () => void openProject() },
+    { id: "save-project", label: "حفظ المشروع", description: "كتابة التغييرات إلى ملف المشروع", group: "المشروع", icon: "save", shortcut: "Ctrl+S", run: () => void saveProject() },
+    { id: "backup-project", label: "نسخة احتياطية", description: "إنشاء نسخة احتياطية من المشروع الحالي", group: "المشروع", icon: "archive", run: () => void backupProject() },
+    { id: "build", label: "بناء الخط", description: "الانتقال إلى لوحة البناء والمعاينة", group: "المشروع", icon: "pulse", shortcut: "Ctrl+B", run: () => setTab("build") },
+    { id: "source", label: "توليد مصدر UFO", description: "كتابة UFO كامل من الخانات الحالية", group: "المشروع", icon: "ufo", run: () => void generateSource() },
+    { id: "check-engine", label: "فحص صحة المحرك", description: "التحقق من Python والأدوات المحلية", group: "النظام", icon: "shield", run: () => { setTab("engine"); void checkEngine(); } },
+    { id: "toggle-sidebar", label: sidebarOpen ? "إخفاء لوحة المشروع" : "إظهار لوحة المشروع", group: "العرض", icon: "sidebar", run: () => setSidebarOpen((value) => !value) },
+    { id: "shortcuts", label: "اختصارات لوحة المفاتيح", group: "العرض", icon: "keyboard", shortcut: "?", run: () => setShortcutsOpen(true) },
+    ...(editor?.commands ?? []).map((command) => ({
+      ...command,
+      icon: command.icon as IconName,
+    })),
+  ];
+
+  const menuGroups: MenuGroup[] = [
     {
-      id: "open-project",
-      label: "فتح مشروع",
-      description: "فتح مجلد مشروع .afsp من القرص المحلي",
-      group: "المشروع",
-      icon: "folderOpen",
-      shortcut: "Ctrl+O",
-      run: () => void openProject(),
+      id: "file",
+      label: "ملف",
+      items: [
+        { id: "new", label: "مشروع جديد…", shortcut: "Ctrl+N", icon: "plus", run: () => setNewProjectOpen(true) },
+        { id: "open", label: "فتح مشروع…", shortcut: "Ctrl+O", icon: "folderOpen", run: () => void openProject() },
+        { id: "save", label: "حفظ المشروع", shortcut: "Ctrl+S", icon: "save", disabled: !project, run: () => void saveProject() },
+        { id: "backup", label: "نسخة احتياطية", icon: "archive", disabled: !project, separatorBefore: true, run: () => void backupProject() },
+        { id: "restore", label: "استعادة نسخة احتياطية…", icon: "history", disabled: !project, run: () => { setTab("build"); showNotice("استخدم قسم النسخ الاحتياطي في لوحة البناء", "ok"); } },
+        { id: "quit", label: "خروج", icon: "close", separatorBefore: true, run: () => {
+          void getCurrentWindow()
+            .close()
+            .catch(() => showNotice("إغلاق النافذة غير متاح في المعاينة", "error"));
+        } },
+      ],
     },
     {
-      id: "save-project",
-      label: "حفظ المشروع",
-      description: "كتابة التغييرات إلى ملف المشروع",
-      group: "المشروع",
-      icon: "save",
-      shortcut: "Ctrl+S",
-      run: () => void saveProject(),
+      id: "edit",
+      label: "تحرير",
+      items: [
+        { id: "undo", label: "تراجع", shortcut: "Ctrl+Z", icon: "undo", disabled: !editor?.canUndo, run: () => editor?.undo() },
+        { id: "redo", label: "إعادة", shortcut: "Ctrl+Shift+Z", icon: "redo", disabled: !editor?.canRedo, run: () => editor?.redo() },
+        { id: "palette", label: "لوحة الأوامر…", shortcut: "Ctrl+K", icon: "command", separatorBefore: true, run: () => setCommandOpen(true) },
+        { id: "shortcuts", label: "اختصارات لوحة المفاتيح", shortcut: "?", icon: "keyboard", run: () => setShortcutsOpen(true) },
+      ],
     },
     {
-      id: "build",
-      label: "بناء الخط",
-      description: "الانتقال إلى لوحة البناء والمعاينة",
-      group: "المشروع",
-      icon: "pulse",
-      run: () => setTab("build"),
+      id: "view",
+      label: "عرض",
+      items: [
+        { id: "sidebar", label: sidebarOpen ? "إخفاء لوحة المشروع" : "إظهار لوحة المشروع", icon: "sidebar", run: () => setSidebarOpen((value) => !value) },
+        ...TABS.map((item) => ({ id: `view-${item.id}`, label: item.label, icon: item.icon, separatorBefore: item.id === "workspace", run: () => setTab(item.id) })),
+      ],
     },
     {
-      id: "check-engine",
-      label: "فحص صحة المحرك",
-      description: "التحقق من Python والأدوات المحلية",
-      group: "النظام",
-      icon: "shield",
-      run: () => {
-        setTab("engine");
-        void checkEngine();
-      },
+      id: "project",
+      label: "مشروع",
+      items: [
+        { id: "source", label: "توليد مصدر UFO", icon: "ufo", disabled: !project, run: () => void generateSource() },
+        { id: "build", label: "بناء الخط", shortcut: "Ctrl+B", icon: "pulse", run: () => setTab("build") },
+        { id: "engine", label: "فحص المحرك", icon: "shield", separatorBefore: true, run: () => { setTab("engine"); void checkEngine(); } },
+      ],
     },
     {
-      id: "toggle-sidebar",
-      label: sidebarOpen ? "إخفاء لوحة المشروع" : "إظهار لوحة المشروع",
-      group: "العرض",
-      icon: "sidebar",
-      run: () => setSidebarOpen((value) => !value),
-    },
-    {
-      id: "shortcuts",
-      label: "اختصارات لوحة المفاتيح",
-      group: "العرض",
-      icon: "keyboard",
-      shortcut: "?",
-      run: () => setShortcutsOpen(true),
+      id: "help",
+      label: "مساعدة",
+      items: [
+        { id: "shortcuts", label: "اختصارات لوحة المفاتيح", icon: "keyboard", run: () => setShortcutsOpen(true) },
+        { id: "about", label: "حول FONTYPE", icon: "info", separatorBefore: true, run: () => showNotice(`FONTYPE ${VERSION} — استوديو خطوط عربي محلي بالكامل`, "ok") },
+      ],
     },
   ];
 
+  const activeTab = TABS.find((item) => item.id === tab) ?? TABS[0];
+  const readinessTip = readiness.checks.filter((item) => !item.ok)
+    .map((item) => `${item.label}: ${item.detail}`).join("\n") || readiness.summary;
+
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="topbar-brand">
-          <span className="brand-mark">ف</span>
-          <div className="brand-copy">
-            <strong>FONTYPE</strong>
-            <span>استوديو الخطوط العربية</span>
-          </div>
-        </div>
+      <MenuBar
+        groups={menuGroups}
+        version={VERSION}
+        onCommand={() => setCommandOpen(true)}
+        onShortcuts={() => setShortcutsOpen(true)}
+      />
 
-        <div className="topbar-breadcrumb" aria-label="مسار المشروع">
-          <span>المشاريع</span>
-          <Icon name="chevronLeft" size={12} />
-          <strong>{project ? project.project.font.familyName : "لا يوجد مشروع مفتوح"}</strong>
-          <Icon name="chevronLeft" size={12} />
-          <span className="breadcrumb-current">{activeTab.label}</span>
-        </div>
+      <div className="chrome-region" role="region" aria-label="شريط الأدوات">
+      <div className="tool-bar" role="toolbar" aria-label="أدوات التطبيق">
+        <IconButton icon="plus" label="مشروع جديد" shortcut="Ctrl+N" onClick={() => setNewProjectOpen(true)} />
+        <IconButton icon="folderOpen" label="فتح مشروع" shortcut="Ctrl+O" onClick={() => void openProject()} />
+        <IconButton icon="save" label="حفظ المشروع" shortcut="Ctrl+S" disabled={!project} onClick={() => void saveProject()} />
+        <ToolbarDivider />
+        <IconButton icon="undo" label="تراجع" shortcut="Ctrl+Z" disabled={!editor?.canUndo} onClick={() => editor?.undo()} />
+        <IconButton icon="redo" label="إعادة" shortcut="Ctrl+Shift+Z" disabled={!editor?.canRedo} onClick={() => editor?.redo()} />
+        <ToolbarDivider />
+        <IconButton
+          icon="sidebar"
+          label={sidebarOpen ? "إخفاء لوحة المشروع" : "إظهار لوحة المشروع"}
+          active={sidebarOpen}
+          onClick={() => setSidebarOpen((value) => !value)}
+        />
+        <IconButton icon="shield" label="فحص المحرك" onClick={() => { setTab("engine"); void checkEngine(); }} />
+        <button
+          type="button"
+          className={`readiness-chip readiness-chip--${readiness.level} has-tip`}
+          data-tip={readinessTip}
+          aria-describedby="readiness-tip"
+          onClick={() => setTab("build")}
+        >
+          <Icon name={readiness.level === "ready" ? "checkCircle" : readiness.level === "blocked" ? "warning" : "info"} size={13} />
+          <span>{readiness.summary}</span>
+          <span id="readiness-tip" className="sr-only">{readinessTip}</span>
+        </button>
+        <ToolbarDivider />
 
-        <button type="button" className="command-trigger" onClick={() => setCommandOpen(true)}>
-          <Icon name="search" size={15} />
+        <button type="button" className="tool-bar-command" onClick={() => setCommandOpen(true)}>
+          <Icon name="search" size={13} />
           <span>بحث سريع أو أمر…</span>
-          <kbd>Ctrl K</kbd>
+          <span className="kbd">Ctrl K</span>
         </button>
 
-        <div className="topbar-meta">
-          <span className="local-chip"><Icon name="shield" size={12} /> محلي بالكامل</span>
-          <span className="phase-chip">المرحلة 6 — التثبيت والإصدار</span>
-          <span className="version-chip">v0.6.0</span>
+        <div className="tool-bar-spacer" />
+        <div className="tool-bar-actions">
+          <button type="button" className="ui-button" onClick={() => setTab("build")}>
+            <Icon name="eye" size={14} /> معاينة
+          </button>
+          <button type="button" className="ui-button ui-button--primary" onClick={() => setTab("build")}>
+            <Icon name="pulse" size={14} /> بناء الخط
+          </button>
         </div>
+      </div>
+      </div>
 
-        <div className="topbar-actions">
-          <IconButton icon="folderOpen" label="فتح مشروع" onClick={() => void openProject()} />
-          <IconButton icon="save" label="حفظ المشروع" disabled={!project} onClick={() => void saveProject()} />
-          <ToolbarDivider />
-          <IconButton icon="pulse" label="البناء والمعاينة" onClick={() => setTab("build")} />
+      <div className="chrome-region" role="region" aria-label="تبويبات المستندات">
+      <div className="document-tabs" role="tablist" aria-label="مساحات العمل">
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.id}
+            className="document-tab"
+            onClick={() => setTab(item.id)}
+          >
+            <Icon name={item.icon} size={14} />
+            <span>{item.label}</span>
+            {item.id === "inventory" && review > 0 ? <span className="tab-badge">{review}</span> : null}
+          </button>
+        ))}
+        <div className="document-tabs-meta">
+          <strong>{familyName}</strong>
+          <code dir="ltr">{project?.project.font.unitsPerEm ?? 1000} UPM</code>
+          <span>محلي</span>
         </div>
-      </header>
+      </div>
+      </div>
 
-      <main className={`workspace-shell ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
-        <ActivityRail
-          items={TABS.map((item) => ({
-            id: item.id,
-            label: item.label,
-            icon: item.icon,
-            badge: item.id === "inventory" && review > 0 ? review : undefined,
-          }))}
-          activeId={tab}
-          onSelect={(id) => setTab(id as Tab)}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((value) => !value)}
-          onCommand={() => setCommandOpen(true)}
-          onShortcuts={() => setShortcutsOpen(true)}
-          healthLabel={healthLabel}
-          healthTone={railTone}
-        />
-
-        <aside className="column sidebar" aria-label="لوحات المشروع">
-          <div className="sidebar-titlebar">
-            <span>المشروع</span>
+      <main
+        className={`workspace-shell ${sidebarOpen ? "" : "sidebar-collapsed"} ${tab === "home" ? "home-active" : ""}`}
+        style={{ "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
+      >
+        <aside className="dock dock--left" aria-label="لوحة المستند">
+          <div className="dock-titlebar">
+            <span>دوكس المستند</span>
             <IconButton
               icon="sidebar"
               label={sidebarOpen ? "طي اللوحة" : "فرد اللوحة"}
-              size={15}
+              size={14}
               onClick={() => setSidebarOpen((value) => !value)}
             />
           </div>
-          <ProjectPanel project={project} onProject={setProject} onNotice={showNotice} />
-          <EnginePanel info={engineInfo} health={health} status={healthStatus} onCheck={checkEngine} />
-        </aside>
-
-        <section className="column main-column">
-          <div className="document-bar">
-            <div className="document-identity">
-              <span className="document-icon"><Icon name={activeTab.icon} size={18} /></span>
-              <div>
-                <h1>{activeTab.label}</h1>
-                <p>{activeTab.description}</p>
-              </div>
-            </div>
-            <div className="document-stats">
-              <span className="doc-stat"><i /> {slots.length} خانة</span>
-              <span className="doc-stat doc-stat--accent"><i /> {ready} معتمدة</span>
-              <span className="doc-stat doc-stat--warning"><i /> {review} للمراجعة</span>
-              <span className="doc-stat doc-stat--info"><i /> {imported} مستوردة</span>
-            </div>
+          <div className="dock-view-tabs">
+            <SegmentedControl
+              label="عرض لوحة المستند"
+              value={dockView}
+              options={[
+                { value: "glyphs", label: "الحروف", icon: "grid" },
+                { value: "project", label: "المشروع", icon: "fileText" },
+                { value: "engine", label: "المحرك", icon: "shield" },
+              ]}
+              onChange={setDockView}
+            />
           </div>
-
-          <div className="tabs" role="tablist" aria-label="أقسام العمل">
-            {TABS.map((item) => (
-              <button
-                key={item.id}
-                role="tab"
-                aria-selected={tab === item.id}
-                className={tab === item.id ? "active" : ""}
-                onClick={() => setTab(item.id)}
-              >
-                <Icon name={item.icon} size={15} />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="view-surface">
-            {tab === "workspace" ? (
+          <div className="dock-body">
+            {dockView === "glyphs" ? (
               project ? (
-                <GlyphWorkspace
-                  project={project}
-                  onProject={setProject}
-                  onNotice={showNotice}
-                  initialSlotId={focusSlotId}
+                <GlyphDock
+                  slots={slots}
+                  selectedId={focusSlotId}
+                  onSelect={(slotId) => { setFocusSlotId(slotId); setTab("workspace"); }}
                 />
               ) : (
-                <div className="panel empty-workspace">
-                  <div className="empty-state">
-                    <span className="empty-state-icon"><Icon name="cursor" size={26} /></span>
-                    <h2>مساحة عمل الخط</h2>
-                    <p className="hint">
-                      افتح مشروعاً واستورد رسماً لحرف ما ليظهر هنا مع المساطر وخطوط القياس
-                      والأدلة والشبكة والالتقاط الذكي.
-                    </p>
-                    <div className="button-row">
-                      <button className="primary" onClick={() => void openProject()}>فتح مشروع</button>
-                    </div>
-                  </div>
+                <div className="glyph-dock-empty">
+                  <Icon name="grid" size={18} />
+                  <p>افتح مشروعاً لعرض الخانات.</p>
                 </div>
               )
-            ) : tab === "inventory" ? (
-              project ? (
-                <InventoryPanel project={project} onProject={setProject} onNotice={showNotice} />
-              ) : (
-                <div className="panel empty-workspace">
-                  <div className="empty-state">
-                    <span className="empty-state-icon"><Icon name="grid" size={26} /></span>
-                    <h2>ابدأ بإنشاء مشروع</h2>
-                    <p className="hint">
-                      أنشئ مشروعاً جديداً أو افتح مشروعاً موجوداً بصيغة <code>.afsp</code> لتوليد
-                      مخزون الخانات واستيراد رسومات SVG لكل خانة على حدة.
-                    </p>
-                  </div>
-                </div>
-              )
-            ) : tab === "build" ? (
-              <BuildPanel
+            ) : dockView === "project" ? (
+              <ProjectPanel project={project} onProject={setProject} onNotice={showNotice} />
+            ) : (
+              <EnginePanel info={engineInfo} health={health} status={healthStatus} onCheck={checkEngine} />
+            )}
+          </div>
+        </aside>
+        <DockResizer
+          label="تغيير عرض لوحة المستند"
+          value={sidebarWidth}
+          min={220}
+          max={420}
+          onChange={setSidebarWidth}
+          reverse
+        />
+
+        <section className="view-surface" aria-label={activeTab.label}>
+          {tab === "home" ? (
+            <HomePanel
+              recents={recents}
+              activePath={project?.path ?? null}
+              prefs={homePrefs}
+              onPrefs={setHomePrefs}
+              onNew={() => setNewProjectOpen(true)}
+              onBrowse={() => void openProject()}
+              onOpen={(path) => void openRecentProject(path)}
+              onTogglePin={(path) => setRecents((list) => togglePin(list, path))}
+              onRemove={removeFromRecents}
+              onRefresh={() => void refreshRecents()}
+              refreshing={refreshing}
+            />
+          ) : tab === "workspace" ? (
+            project ? (
+              <GlyphWorkspace
                 project={project}
                 onProject={setProject}
                 onNotice={showNotice}
-                onOpenSlot={(slotId) => {
-                  setFocusSlotId(slotId);
-                  setTab("workspace");
-                }}
+                initialSlotId={focusSlotId}
+                registerEditor={registerEditor}
+                onOpenInventory={() => setTab("inventory")}
               />
             ) : (
-              <SpikePanel project={project} onNotice={showNotice} />
-            )}
-          </div>
+              <div className="panel empty-workspace">
+                <EmptyState
+                  icon="cursor"
+                  title="لا يوجد مستند مفتوح"
+                  description="ثلاث خطوات تفصلك عن أول خط عربي قابل للبناء."
+                  steps={[
+                    "أنشئ مشروعاً محلياً بصيغة .afsp أو افتح مشروعاً موجوداً.",
+                    "استورد SVG لكل شكل من أشكال الحرف في خانته المخصصة.",
+                    "اضبط المساطر والمراسي، ثم راجع التحقق قبل بناء الخط.",
+                  ]}
+                  note={<><Icon name="shield" size={13} /><span>لا تُرسل الرسومات أو بيانات المشروع إلى أي خدمة شبكية.</span></>}
+                  action={
+                    <>
+                      <button type="button" className="primary" onClick={() => setNewProjectOpen(true)}>مشروع جديد</button>
+                      <button type="button" onClick={() => void openProject()}>فتح مشروع</button>
+                    </>
+                  }
+                />
+              </div>
+            )
+          ) : tab === "inventory" ? (
+            project ? (
+              <InventoryPanel project={project} onProject={setProject} onNotice={showNotice} />
+            ) : (
+              <div className="panel empty-workspace">
+                <EmptyState
+                  icon="grid"
+                  title="لا توجد خانات"
+                  description="مخزون الخانات يُنشأ مع المشروع، وتبقى هوية كل خانة مرتبطة بالمشروع لا باسم ملف SVG."
+                  steps={[
+                    "أنشئ مشروعاً جديداً أو افتح مشروعاً بصيغة .afsp.",
+                    "راجع قائمة الأشكال المطلوبة لكل حرف.",
+                  ]}
+                  action={<button type="button" className="primary" onClick={() => setNewProjectOpen(true)}>مشروع جديد</button>}
+                />
+              </div>
+            )
+          ) : tab === "build" ? (
+            <BuildPanel
+              project={project}
+              onProject={setProject}
+              onNotice={showNotice}
+              onOpenSlot={(slotId) => {
+                setFocusSlotId(slotId);
+                setTab("workspace");
+              }}
+            />
+          ) : (
+            <SpikePanel project={project} onNotice={showNotice} />
+          )}
         </section>
       </main>
 
       <div className="toast-stack" role="region" aria-label="الإشعارات">
         {toasts.map((toast) => (
-          <div key={toast.id} className={`toast ${toast.kind}`} role="status">
-            <Icon name={toast.kind === "ok" ? "checkCircle" : "warning"} size={17} />
+          <div key={toast.id} className={`toast ${toast.kind}`} role={toast.kind === "error" ? "alert" : "status"}>
+            <Icon name={toast.kind === "ok" ? "checkCircle" : "warning"} size={15} />
             <span>{toast.text}</span>
           </div>
         ))}
@@ -360,25 +579,40 @@ export default function App() {
 
       <footer className="app-statusbar">
         <span className="status-item status-project">
-          <Icon name="cube" size={13} />
-          {project ? <strong>{project.project.font.familyName}</strong> : <span>لا يوجد مشروع</span>}
+          <Icon name="cube" size={12} />
+          <strong>{familyName}</strong>
         </span>
         <span className="status-sep" />
         <span className="status-item status-optional">الخانات: <strong>{slots.length}</strong></span>
         <span className="status-item status-optional">معتمدة: <strong>{ready}</strong></span>
-        <span className="status-item status-optional">تحت المراجعة: <strong>{review}</strong></span>
+        <span className="status-item status-optional">للمراجعة: <strong>{review}</strong></span>
+        <span className="status-item status-optional">مستوردة: <strong>{imported}</strong></span>
+        <span className="status-item status-progress" aria-label={`الخانات المعتمدة ${ready} من ${slots.length}`}>
+          <span>جاهزية</span>
+          <span className="status-progress-track" aria-hidden="true">
+            <span className="status-progress-fill" style={{ width: `${slots.length ? (ready / slots.length) * 100 : 0}%` }} />
+          </span>
+          <strong>{ready}/{slots.length}</strong>
+        </span>
         <span className="status-grow" />
+        <span className="status-item">{activeTab.label}</span>
         <button type="button" className="status-command" onClick={() => setCommandOpen(true)}>
-          <Icon name="command" size={12} /> الأوامر <kbd>Ctrl K</kbd>
+          <Icon name="command" size={11} /> الأوامر <span className="kbd">Ctrl K</span>
         </button>
         <StatusChip tone={healthTone} icon={healthStatus === "ok" ? "check" : healthStatus === "error" ? "warning" : "pulse"}>
           {healthLabel}
         </StatusChip>
-        <span className="status-item" dir="ltr">v0.6.0</span>
+        <span className="status-item" dir="ltr">{VERSION}</span>
       </footer>
 
       <CommandPalette open={commandOpen} actions={commands} onClose={() => setCommandOpen(false)} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <ProjectDialog
+        open={newProjectOpen}
+        onClose={() => setNewProjectOpen(false)}
+        onCreated={(handle) => { recordProject(handle); setProject(handle); setTab("workspace"); }}
+        onNotice={showNotice}
+      />
     </div>
   );
 }

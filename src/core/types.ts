@@ -155,6 +155,23 @@ export interface ProjectHandle {
   migrationNotes: string[];
 }
 
+/** Read-only Home-screen metadata returned by Rust; never written to .afsp. */
+export interface ProjectSummary {
+  path: string;
+  projectId: string;
+  name: string;
+  family: string;
+  style: string;
+  upm: number;
+  updatedAt: string;
+  slots: number;
+  ready: number;
+  review: number;
+  imported: number;
+  builds: number;
+  available: boolean;
+}
+
 export interface PresetGroupInfo {
   id: string;
   label: string;

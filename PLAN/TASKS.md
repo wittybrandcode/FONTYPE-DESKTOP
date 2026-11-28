@@ -146,11 +146,11 @@ Validation uses `error` (blocking), `warning` and `info` severities with Arabic 
 
 - [x] Add project backup and recovery.
 - [x] Add import/build cancellation and progress reporting.
-- [ ] Test high-DPI and multiple display scales (manual matrix pending).
+- [x] Test high-DPI and multiple display scales (DPR 2 and 150% zoom simulated in `phase9-accessibility-qa-1420.cjs`; physical monitor matrix remains a release check).
 - [x] Test snap behavior across zoom levels.
 - [x] Test malformed and oversized SVG inputs.
-- [ ] Test Windows installer packaging; assess macOS packaging (debug Windows launch verified).
-- [ ] Add sample project and onboarding walkthrough (written walkthrough in `README.md`).
+- [ ] Test Windows installer packaging; assess macOS packaging (debug Windows launch verified; still requires a packaging machine).
+- [x] Add sample project and onboarding walkthrough (`samples/sample-alef.afsp/` + `README.md` quick start).
 - [x] Add export metadata editor and output folder actions.
 - [x] Prepare release checklist and known limitations.
 
@@ -161,9 +161,24 @@ can be restored from the Build panel. Engine jobs expose progress/log events and
 job id. Export metadata (version, designer, copyright, license) is editable in the Project panel and
 flows into the UFO/name table. Pinned `engine/uv.lock`, `package-lock.json` and `src-tauri/Cargo.lock`
 make the build reproducible; `README.md` documents the supported character set, build steps, release
-checklist and known limitations. Final verification: Python 26, Rust 12, frontend 21 tests passing;
-`npm run build` and the compiled Tauri executable launch cleanly. Remaining manual checks are listed
-in `README.md` under known limitations.
+checklist and known limitations. Final verification after Phase 9: Python 27, Rust 14, frontend 92
+tests passing; `npm run build` and the compiled Tauri executable launch cleanly. The high-DPI and
+150% checks were reproduced in Chromium; the bundled sample project is covered by a Rust test.
+Only installer packaging, macOS assessment and physical screen-reader/monitor checks remain external
+and are listed in `README.md` under known limitations.
+
+## Phase 9 — Glyph Studio Pro ✅ مكتملة
+
+- [x] M1/M2 — zoom around cursor, minimap, marquee multi-select, transform box, numeric fields, align/distribute.
+- [x] R0–R4 — single canvas container, accurate rulers, ruler guides, snap registry with smart guides, numeric guide controls.
+- [x] M4–M7 — metric layers, live Arabic preview with onion skin, contextual inspector, layouts, commands and labelled history.
+- [x] M8 — sustained `requestAnimationFrame` edits below 16ms and full accessibility/overflow matrix.
+- [x] M3أ/M3ب — subpath display split, then Bezier node/handle editing with deterministic runtime ids and no schema change.
+- [x] `DATA-GATE` — Rust roundtrip and sample-project tests prove `.afsp` compatibility with Phases 0–8.
+
+**Exit criteria:** all automated suites green, axe serious/critical 0, overflow 0 on 1440×900 /
+1280×800 / 1024×768 / 820×900, visual approval granted, and every edit written through existing
+project fields. Evidence: `PLAN/PHASE9_QA_REPORT.md`.
 
 ## Priority order
 

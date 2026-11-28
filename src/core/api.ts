@@ -11,6 +11,7 @@ import type {
   PresetInfo,
   Project,
   ProjectHandle,
+  ProjectSummary,
   ShapingOptions,
   SvgInspection,
   WorkspacePrefs,
@@ -25,6 +26,8 @@ export type CreateProjectArgs = {
 };
 
 export const api = {
+  projectSummaries: async (paths: string[]) =>
+    (await invoke<ProjectSummary[] | null>("project_summaries", { paths })) ?? [],
   createProject: (args: CreateProjectArgs) =>
     invoke<ProjectHandle>("create_project", args),
   openProject: (path: string) => invoke<ProjectHandle>("open_project", { path }),
@@ -45,6 +48,23 @@ export const api = {
       inspection,
       advanceWidth,
       mode,
+    }),
+  /** M3ب — writes only the existing previewPath/bounds/count fields. */
+  setPreviewPath: (
+    path: string,
+    slotId: string,
+    previewPath: string,
+    bounds: [number, number, number, number],
+    contours: number,
+    segments: number,
+  ) =>
+    invoke<GlyphSlot>("set_preview_path", {
+      path,
+      slotId,
+      previewPath,
+      bounds,
+      contours,
+      segments,
     }),
   removeArtwork: (path: string, slotId: string) =>
     invoke<GlyphSlot>("remove_artwork", { path, slotId }),
@@ -238,13 +258,15 @@ export function shapePreview(
   fontPath: string,
   text: string,
   mode: string,
+  onJob?: (jobId: string) => void,
 ): Promise<Record<string, unknown>> {
-  return runEngineJob("shape_preview", {
-    fontPath,
-    text,
-    mode,
-    glyphs: projectGlyphParams(handle),
-  });
+  return runEngineJob(
+    "shape_preview",
+    { fontPath, text, mode, glyphs: projectGlyphParams(handle) },
+    undefined,
+    180_000,
+    onJob,
+  );
 }
 
 export function runShapingCorpus(

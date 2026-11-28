@@ -80,11 +80,23 @@ Metric values above are illustrative defaults only. The project wizard should ex
   "form": "initial",
   "joiningType": "D",
   "required": true,
-  "source": {
-    "originalSvg": "glyphs/beh/initial.svg",
+  "originalSvg": "glyphs/beh/initial.svg",
+  "sourceRevisions": [],
+  "import": {
+    "mode": "fit_to_em",
+    "viewBox": [0, 0, 1000, 1000],
+    "sourceWidth": 1000,
+    "sourceHeight": 1000,
+    "scale": 1,
+    "matrix": [1, 0, 0, 1, 0, 0],
     "sourceFileName": "my-drawing.svg",
+    "contentHash": "sha256:...",
     "importedAt": "2026-01-01T12:00:00Z",
-    "contentHash": "sha256:..."
+    "contours": 1,
+    "segments": 8,
+    "bounds": [40, 0, 660, 700],
+    "findings": [],
+    "previewPath": "M40 0 ... Z"
   },
   "placement": {
     "x": 0,
@@ -130,7 +142,8 @@ The record is illustrative. The exact joining role and which anchors apply must 
 - `glyphName`: internal font glyph name.
 - `form`: isolated/initial/medial/final/base/mark/ligature/alternate.
 - `joiningType`: Unicode-derived joining classification where applicable.
-- `source`: original SVG path and hash.
+- `originalSvg`: retained source artwork inside the project folder.
+- `import`: normalized geometry, preview path, bounds, counts, hash and findings.
 - `placement`: transform applied to normalized source geometry.
 - `metrics`: advance width and side bearings.
 - `anchors`: named attachment points.
@@ -170,3 +183,14 @@ Status must be recalculated when artwork, metrics, anchors, or project settings 
 - Every build references a specific project revision.
 - Missing glyphs are represented as missing slots, not silently omitted from the inventory.
 - Unicode codepoints must be stored as strings in a canonical form such as `U+0628` to avoid numeric serialization ambiguity.
+
+## 8. Phase 9 / `DATA-GATE` invariant
+
+Phase 9 M3ب adds Bezier node editing **without changing the project schema**:
+
+- Node/handle identities such as `c0-n2` are derived at runtime from the order of commands in the existing `previewPath`. No `pathModel`, `contourIds`, `pointIds` or command arrays are persisted.
+- `set_preview_path` writes only the existing `import` fields `previewPath`, `bounds`, `contours` and `segments`.
+- `originalSvg`, `sourceFileName`, `contentHash`, `importedAt`, `sourceRevisions`, `placement`, `metrics`, `anchors` and global settings are untouched.
+- An approval edit resets `approvedAt` and flags geometry-dependent anchors for review; the source artwork and hash remain the audit trail.
+- `import::tests::preview_path_edit_roundtrips_without_schema_changes` opens a legacy project, verifies the absence of new fields, edits the path, reopens it and confirms the invariants above.
+- `samples/sample-alef.afsp/` is a bundled schema-`0.1.0` example with one ready slot, a clean import and an SVG copy; `bundled_sample_project_loads` verifies it can be opened without migration notes.

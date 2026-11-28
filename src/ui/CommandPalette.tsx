@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon, type IconName } from "./icons";
-import { Kbd } from "./components";
+import { Kbd, useFocusTrap } from "./components";
 
 export interface CommandAction {
   id: string;
@@ -23,6 +23,7 @@ export default function CommandPalette({ open, actions, onClose }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const trapRef = useFocusTrap(open);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -81,6 +82,7 @@ export default function CommandPalette({ open, actions, onClose }: Props) {
   return (
     <div className="command-backdrop" onPointerDown={onClose}>
       <div
+        ref={trapRef}
         className="command-palette"
         role="dialog"
         aria-modal="true"

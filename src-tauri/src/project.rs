@@ -3,6 +3,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
+use serde::Serialize;
 
 use crate::contracts::{
     now_iso, BuildRecord, Project, ProjectHandle, ShapingOptions, SCHEMA_VERSION,
@@ -98,6 +99,99 @@ pub(crate) fn read_project(root: &Path) -> Result<(Project, Vec<String>), String
         )]
     };
     Ok((project, notes))
+}
+
+/// Compact, read-only metadata used by the Home screen's local project registry.
+/// It never writes to the project and adds no field to the .afsp schema.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSummary {
+    pub path: String,
+    pub project_id: String,
+    pub name: String,
+    pub family: String,
+    pub style: String,
+    pub upm: u32,
+    pub updated_at: String,
+    pub slots: usize,
+    pub ready: usize,
+    pub review: usize,
+    pub imported: usize,
+    pub builds: usize,
+    pub available: bool,
+}
+
+fn unavailable_summary(path: String) -> ProjectSummary {
+    ProjectSummary {
+        path,
+        project_id: String::new(),
+        name: String::new(),
+        family: String::new(),
+        style: String::new(),
+        upm: 1000,
+        updated_at: String::new(),
+        slots: 0,
+        ready: 0,
+        review: 0,
+        imported: 0,
+        builds: 0,
+        available: false,
+    }
+}
+
+/// Reads each requested project once to refresh the Home registry. Missing or
+/// unreadable folders are returned as unavailable so the UI can offer removal
+/// without touching files on disk.
+#[tauri::command]
+pub fn project_summaries(paths: Vec<String>) -> Vec<ProjectSummary> {
+    paths
+        .into_iter()
+        .map(|raw| {
+            let root = match normalize_root(raw.clone()) {
+                Ok(root) => root,
+                Err(_) => return unavailable_summary(raw),
+            };
+            let (project, _) = match read_project(&root) {
+                Ok(value) => value,
+                Err(_) => return unavailable_summary(raw),
+            };
+            let folder = root
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| raw.clone());
+            let name = folder.strip_suffix(".afsp").unwrap_or(&folder).to_string();
+            let ready = project
+                .glyph_slots
+                .iter()
+                .filter(|slot| slot.status == "ready")
+                .count();
+            let review = project
+                .glyph_slots
+                .iter()
+                .filter(|slot| slot.status == "needs-review")
+                .count();
+            let imported = project
+                .glyph_slots
+                .iter()
+                .filter(|slot| slot.import.is_some())
+                .count();
+            ProjectSummary {
+                path: raw,
+                project_id: project.project_id,
+                name,
+                family: project.font.family_name,
+                style: project.font.style_name,
+                upm: project.font.units_per_em,
+                updated_at: project.updated_at,
+                slots: project.glyph_slots.len(),
+                ready,
+                review,
+                imported,
+                builds: project.builds.len(),
+                available: true,
+            }
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -263,6 +357,25 @@ mod tests {
     }
 
     #[test]
+    fn bundled_sample_project_loads() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("samples")
+            .join("sample-alef.afsp");
+        let (project, notes) = read_project(&root).unwrap();
+        assert!(notes.is_empty());
+        assert_eq!(project.schema_version, SCHEMA_VERSION);
+        assert_eq!(project.glyph_slots.len(), 1);
+        let slot = &project.glyph_slots[0];
+        assert_eq!(slot.slot_id, "alef.isolated");
+        assert_eq!(slot.status, "ready");
+        let import = slot.import.as_ref().unwrap();
+        assert_eq!(import.contours, 1);
+        assert!(import.preview_path.starts_with("M273.75"));
+        assert!(root.join(slot.original_svg.clone().unwrap()).is_file());
+    }
+
+    #[test]
     fn invalid_project_name_is_rejected() {
         let parent = temp_parent();
         let result = create_project(
@@ -328,6 +441,39 @@ mod tests {
         let restored = restore_project(handle.path.clone(), backup).unwrap();
         assert_ne!(restored.project.font.designer, "changed");
         assert_eq!(restored.project.builds.len(), 1);
+
+        fs::remove_dir_all(&parent).unwrap();
+    }
+
+    #[test]
+    fn project_summaries_refresh_metadata_and_flag_missing_projects() {
+        let parent = temp_parent();
+        let handle = create_project(
+            parent.to_string_lossy().into_owned(),
+            "خط الملخص".into(),
+            "Summary Family".into(),
+            "Regular".into(),
+            1000,
+        )
+        .unwrap();
+        let missing = parent.join("missing.afsp").to_string_lossy().into_owned();
+
+        let summaries = project_summaries(vec![handle.path.clone(), missing.clone()]);
+        assert_eq!(summaries.len(), 2);
+        assert!(summaries[0].available);
+        assert_eq!(summaries[0].name, "خط الملخص");
+        assert_eq!(summaries[0].family, "Summary Family");
+        assert_eq!(summaries[0].upm, 1000);
+        assert!(summaries[0].slots > 0);
+        assert!(!summaries[1].available);
+
+        let mut project = handle.project.clone();
+        if let Some(slot) = project.glyph_slots.first_mut() {
+            slot.status = "ready".into();
+        }
+        save_project(handle.path.clone(), project).unwrap();
+        let refreshed = project_summaries(vec![handle.path.clone()]);
+        assert_eq!(refreshed[0].ready, 1);
 
         fs::remove_dir_all(&parent).unwrap();
     }

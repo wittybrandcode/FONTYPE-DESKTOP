@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   api,
@@ -7,9 +7,10 @@ import {
   shapePreview,
   type BuildJobOptions,
 } from "../core/api";
+import { buildReadiness } from "../core/readiness";
 import type { EngineEvent } from "../core/protocol";
 import type { BuildRecord, ProjectHandle, ValidationFinding } from "../core/types";
-import { EmptyState, PanelHeader, SectionLabel, StatusChip } from "../ui/components";
+import { EmptyState, InfoTip, PanelHeader, SectionLabel, StatusChip } from "../ui/components";
 import { Icon } from "../ui/icons";
 
 interface Props {
@@ -79,6 +80,9 @@ export default function BuildPanel({ project, onProject, onNotice, onOpenSlot }:
   const [previewBusy, setPreviewBusy] = useState(false);
   const [corpus, setCorpus] = useState<Record<string, unknown> | null>(null);
   const [corpusBusy, setCorpusBusy] = useState(false);
+
+  const readiness = useMemo(() => buildReadiness(project), [project]);
+  const blockers = readiness.checks.filter((item) => !item.ok && item.severity === "blocker");
 
   const fontPath =
     result && typeof result.artifacts === "object" && result.artifacts !== null
@@ -285,8 +289,39 @@ export default function BuildPanel({ project, onProject, onNotice, onOpenSlot }:
         </label>
       </div>
 
+      {blockers.length > 0 ? (
+        <div className="readiness-gate" role="status">
+          <div className="readiness-gate-head">
+            <Icon name="warning" size={14} />
+            <strong>{readiness.summary}</strong>
+            <InfoTip tip="بوابة الجاهزية تمنع بناءً ينتج خطاً ناقصاً. الفحوص مشتقة من بيانات المشروع الحالية فقط، بلا حقول جديدة." />
+          </div>
+          <ul>
+            {blockers.slice(0, 4).map((item) => {
+              const targetSlot = item.slotId ?? project?.project.glyphSlots[0]?.slotId;
+              return (
+                <li key={item.id}>
+                  {targetSlot ? (
+                    <button type="button" className="has-tip" data-tip={item.detail} aria-describedby={`blocker-${item.id}`} onClick={() => onOpenSlot(targetSlot)}>
+                      <span id={`blocker-${item.id}`} className="sr-only">{item.detail}</span>
+                      {item.label}
+                    </button>
+                  ) : (
+                    <span className="has-tip" data-tip={item.detail} aria-describedby={`blocker-${item.id}`}>
+                      <span id={`blocker-${item.id}`} className="sr-only">{item.detail}</span>
+                      {item.label}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+            {blockers.length > 4 ? <li><span>و{blockers.length - 4} عوائق أخرى</span></li> : null}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="button-row wrap">
-        <button className="primary" onClick={() => void runBuild()} disabled={building}>
+        <button className="primary" onClick={() => void runBuild()} disabled={building || !readiness.canBuild}>
           {building ? "جارٍ البناء…" : "بناء OTF + TTF"}
         </button>
         <button onClick={() => void cancelBuild()} disabled={!building}>
