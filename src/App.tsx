@@ -3,8 +3,21 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, buildFontSource, runEngineJob } from "./core/api";
 import { buildReadiness } from "./core/readiness";
+import {
+  loadHomePrefs,
+  loadRecents,
+  mergeSummaries,
+  removeRecent,
+  saveHomePrefs,
+  saveRecents,
+  togglePin,
+  upsertRecent,
+  type HomePrefs,
+  type RecentProject,
+} from "./core/recentProjects";
 import type { ProjectHandle } from "./core/types";
 import BuildPanel from "./components/BuildPanel";
+import HomePanel from "./components/HomePanel";
 import EnginePanel from "./components/EnginePanel";
 import GlyphWorkspace, { type EditorActions } from "./components/GlyphWorkspace";
 import InventoryPanel from "./components/InventoryPanel";
@@ -18,7 +31,7 @@ import ShortcutsDialog from "./ui/ShortcutsDialog";
 import { Icon, type IconName } from "./ui/icons";
 import { DockResizer, EmptyState, IconButton, SegmentedControl, StatusChip, ToolbarDivider } from "./ui/components";
 
-type Tab = "workspace" | "inventory" | "build" | "engine";
+type Tab = "home" | "workspace" | "inventory" | "build" | "engine";
 type NoticeKind = "ok" | "error";
 
 interface Toast {
@@ -28,6 +41,7 @@ interface Toast {
 }
 
 const TABS: Array<{ id: Tab; label: string; description: string; icon: IconName }> = [
+  { id: "home", label: "الرئيسية", description: "المشاريع الأخيرة وبدء العمل", icon: "home" },
   { id: "workspace", label: "مساحة العمل", description: "تحرير الرسوم والمساطر والمراسي", icon: "cursor" },
   { id: "inventory", label: "مخزون الخانات", description: "استيراد الخانات وإدارة حالتها", icon: "grid" },
   { id: "build", label: "البناء والمعاينة", description: "توليد الخط واختبار التشكيل", icon: "pulse" },
@@ -42,7 +56,10 @@ export default function App() {
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
   const [healthStatus, setHealthStatus] = useState<"idle" | "checking" | "ok" | "error">("idle");
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [tab, setTab] = useState<Tab>("workspace");
+  const [tab, setTab] = useState<Tab>("home");
+  const [recents, setRecents] = useState<RecentProject[]>(() => loadRecents());
+  const [homePrefs, setHomePrefs] = useState<HomePrefs>(() => loadHomePrefs());
+  const [refreshing, setRefreshing] = useState(false);
   const [dockView, setDockView] = useState<"glyphs" | "project" | "engine">("glyphs");
   const [focusSlotId, setFocusSlotId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -62,6 +79,43 @@ export default function App() {
       .catch((error) => showNotice(String(error), "error"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    saveRecents(recents);
+  }, [recents]);
+
+  useEffect(() => {
+    saveHomePrefs(homePrefs);
+  }, [homePrefs]);
+
+  const recentPathsKey = recents.map((item) => item.path).join("\u0000");
+
+  useEffect(() => {
+    if (recents.length === 0) return;
+    let cancelled = false;
+    setRefreshing(true);
+    void api
+      .projectSummaries(recents.map((item) => item.path))
+      .then((summaries) => {
+        if (!cancelled) setRecents((list) => mergeSummaries(list, summaries));
+      })
+      .catch(() => {
+        // The stored snapshot remains usable when Rust is unavailable (browser preview).
+      })
+      .finally(() => {
+        if (!cancelled) setRefreshing(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recentPathsKey]);
+
+  useEffect(() => {
+    if (!project) return;
+    const timer = window.setTimeout(() => {
+      setRecents((list) => upsertRecent(list, project));
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [project]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -121,23 +175,63 @@ export default function App() {
     }
   }
 
+  function recordProject(handle: ProjectHandle) {
+    setRecents((list) => upsertRecent(list, handle));
+  }
+
+  function activateProject(handle: ProjectHandle) {
+    recordProject(handle);
+    setProject(handle);
+    setTab("workspace");
+    showNotice("تم فتح المشروع", "ok");
+    if (handle.migrationNotes.length > 0) showNotice(handle.migrationNotes.join(" · "), "ok");
+  }
+
   async function openProject() {
     try {
       const path = await open({ directory: true, multiple: false, title: "اختر مجلد المشروع (.afsp)" });
       if (typeof path !== "string") return;
-      const handle = await api.openProject(path);
-      setProject(handle);
-      showNotice("تم فتح المشروع", "ok");
-      if (handle.migrationNotes.length > 0) showNotice(handle.migrationNotes.join(" · "), "ok");
+      activateProject(await api.openProject(path));
     } catch (error) {
       showNotice(String(error), "error");
     }
+  }
+
+  async function openRecentProject(path: string) {
+    try {
+      activateProject(await api.openProject(path));
+    } catch (error) {
+      showNotice(`تعذّر فتح المشروع من السجل: ${String(error)}`, "error");
+    }
+  }
+
+  async function refreshRecents() {
+    if (recents.length === 0) return;
+    setRefreshing(true);
+    try {
+      const summaries = await api.projectSummaries(recents.map((item) => item.path));
+      setRecents((list) => mergeSummaries(list, summaries));
+    } catch (error) {
+      showNotice(`تعذّر تحديث سجل المشاريع: ${String(error)}`, "error");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  function removeFromRecents(path: string) {
+    setRecents((list) => removeRecent(list, path));
+    showNotice("أُزيل المشروع من السجل المحلي؛ لم تُحذف ملفاته.", "ok");
   }
 
   async function saveProject() {
     if (!project) return;
     try {
       await api.saveProject(project.path, project.project);
+      recordProject(project);
+      void api
+        .projectSummaries([project.path])
+        .then((summaries) => setRecents((list) => mergeSummaries(list, summaries)))
+        .catch(() => undefined);
       showNotice("تم حفظ المشروع", "ok");
     } catch (error) {
       showNotice(String(error), "error");
@@ -340,7 +434,7 @@ export default function App() {
       </div>
 
       <main
-        className={`workspace-shell ${sidebarOpen ? "" : "sidebar-collapsed"}`}
+        className={`workspace-shell ${sidebarOpen ? "" : "sidebar-collapsed"} ${tab === "home" ? "home-active" : ""}`}
         style={{ "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
       >
         <aside className="dock dock--left" aria-label="لوحة المستند">
@@ -396,7 +490,21 @@ export default function App() {
         />
 
         <section className="view-surface" aria-label={activeTab.label}>
-          {tab === "workspace" ? (
+          {tab === "home" ? (
+            <HomePanel
+              recents={recents}
+              activePath={project?.path ?? null}
+              prefs={homePrefs}
+              onPrefs={setHomePrefs}
+              onNew={() => setNewProjectOpen(true)}
+              onBrowse={() => void openProject()}
+              onOpen={(path) => void openRecentProject(path)}
+              onTogglePin={(path) => setRecents((list) => togglePin(list, path))}
+              onRemove={removeFromRecents}
+              onRefresh={() => void refreshRecents()}
+              refreshing={refreshing}
+            />
+          ) : tab === "workspace" ? (
             project ? (
               <GlyphWorkspace
                 project={project}
@@ -502,7 +610,7 @@ export default function App() {
       <ProjectDialog
         open={newProjectOpen}
         onClose={() => setNewProjectOpen(false)}
-        onCreated={(handle) => { setProject(handle); setTab("workspace"); }}
+        onCreated={(handle) => { recordProject(handle); setProject(handle); setTab("workspace"); }}
         onNotice={showNotice}
       />
     </div>

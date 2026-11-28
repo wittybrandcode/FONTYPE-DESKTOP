@@ -14,6 +14,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(EngineState::discover())
         .invoke_handler(tauri::generate_handler![
+            project::project_summaries,
             project::create_project,
             project::open_project,
             project::save_project,

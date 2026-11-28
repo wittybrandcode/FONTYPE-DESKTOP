@@ -11,6 +11,7 @@ import type {
   PresetInfo,
   Project,
   ProjectHandle,
+  ProjectSummary,
   ShapingOptions,
   SvgInspection,
   WorkspacePrefs,
@@ -25,6 +26,8 @@ export type CreateProjectArgs = {
 };
 
 export const api = {
+  projectSummaries: async (paths: string[]) =>
+    (await invoke<ProjectSummary[] | null>("project_summaries", { paths })) ?? [],
   createProject: (args: CreateProjectArgs) =>
     invoke<ProjectHandle>("create_project", args),
   openProject: (path: string) => invoke<ProjectHandle>("open_project", { path }),

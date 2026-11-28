@@ -133,7 +133,8 @@
   :focus-visible { outline: 2px solid Highlight; }
   .ui-button, .icon-btn, .panel, .dock, .menu-popup, .modal-card,
   .command-palette, .status-chip, .accordion-badge, .kbd,
-  .dock-resizer, .inspector-resizer { border: 1px solid CanvasText; }
+  .dock-resizer, .inspector-resizer, .home-card, .home-card-thumb,
+  .home-hero-mark, .home-stats > div, .home-empty-icon { border: 1px solid CanvasText; }
   .ruler, .ws-canvas, .inspector-head, .panel-header { border-color: CanvasText; }
   .metric-line, .workspace-guide, .workspace-artwork, .anchor-marker circle,
   .anchor-connection, .em-frame, .ws-marquee, .ws-transform-outline,

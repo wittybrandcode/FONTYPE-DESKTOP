@@ -32,6 +32,7 @@ import { FolderOpen } from "@phosphor-icons/react/dist/csr/FolderOpen";
 import { Gear } from "@phosphor-icons/react/dist/csr/Gear";
 import { GridFour } from "@phosphor-icons/react/dist/csr/GridFour";
 import { Hand } from "@phosphor-icons/react/dist/csr/Hand";
+import { House } from "@phosphor-icons/react/dist/csr/House";
 import { Info } from "@phosphor-icons/react/dist/csr/Info";
 import { Keyboard } from "@phosphor-icons/react/dist/csr/Keyboard";
 import { Lightning } from "@phosphor-icons/react/dist/csr/Lightning";
@@ -46,6 +47,7 @@ import { Minus } from "@phosphor-icons/react/dist/csr/Minus";
 import { Play } from "@phosphor-icons/react/dist/csr/Play";
 import { Plus } from "@phosphor-icons/react/dist/csr/Plus";
 import { PlusCircle } from "@phosphor-icons/react/dist/csr/PlusCircle";
+import { PushPin } from "@phosphor-icons/react/dist/csr/PushPin";
 import { Pulse } from "@phosphor-icons/react/dist/csr/Pulse";
 import { Ruler } from "@phosphor-icons/react/dist/csr/Ruler";
 import { ShieldCheck } from "@phosphor-icons/react/dist/csr/ShieldCheck";
@@ -103,6 +105,7 @@ const iconMap = {
   gear: Gear,
   grid: GridFour,
   hand: Hand,
+  home: House,
   info: Info,
   keyboard: Keyboard,
   lightning: Lightning,
@@ -118,6 +121,7 @@ const iconMap = {
   plus: Plus,
   add: PlusCircle,
   pulse: Pulse,
+  pin: PushPin,
   ruler: Ruler,
   shield: ShieldCheck,
   sidebar: SidebarSimple,
